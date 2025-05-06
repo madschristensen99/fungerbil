@@ -2,31 +2,31 @@
   "name": "fungerbil-server",
   "version": "0.1.0",
   "description": "Server for Fun Gerbil XMR/USDC Atomic Swap Platform",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "tsc && node dist/index.js",
-    "dev": "nodemon --exec ts-node --esm src/index.ts"
+    "start": "node swap-server.js",
+    "test": "node test-swap-server.js"
   },
-  "keywords": ["monero", "xmr", "usdc", "atomic-swap", "cross-chain"],
+  "keywords": [
+    "monero",
+    "xmr",
+    "usdc",
+    "atomic-swap",
+    "cross-chain"
+  ],
   "author": "",
   "license": "Apache-2.0",
   "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/node": "^22.10.2",
-    "nodemon": "^3.0.3",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "nodemon": "^3.0.3"
   },
   "dependencies": {
+    "@noble/secp256k1": "^2.2.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "ethers": "^6.10.0",
     "express": "^4.18.2",
     "monero-ts": "^0.11.3",
+    "node-fetch": "^3.3.2",
     "winston": "^3.11.0"
   }
 }
