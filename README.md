@@ -89,7 +89,7 @@ The atomic swap follows these steps:
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/fungerbil.git
+   git clone https://github.com/madschristensen99/fungerbil.git
    cd fungerbil
    ```
 
