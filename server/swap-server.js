@@ -4,9 +4,10 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { initializeMoneroWallet } from './monero-wallet-service.js';
-import { createUsdcToXmrSwap, getUsdcToXmrSwap, setUsdcToXmrSwapReady, claimUsdcToXmrSwap, getAllUsdcToXmrSwaps } from './usdc-to-xmr-handler.js';
+import { createUsdcToXmrSwap, getUsdcToXmrSwap, setUsdcToXmrSwapReady, claimUsdcToXmrSwap, refundUsdcToXmrSwap, getAllUsdcToXmrSwaps } from './usdc-to-xmr-handler.js';
 import { createXmrToUsdcSwap, getXmrToUsdcSwap, sendXmrForSwap, createEvmSwapAfterXmrSent, setXmrToUsdcSwapReady, claimXmrToUsdcSwap, getAllXmrToUsdcSwaps } from './xmr-to-usdc-handler.js';
 import web3SwapApi from './web3-swap-api.js';
+import { cleanupAllTempWalletFiles } from './monero-key-exchange.js';
 
 // Load environment variables
 dotenv.config();
@@ -25,9 +26,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes for USDC to XMR swaps
+// Routes for USDC to XMR swaps (Athanor protocol)
 app.post('/api/swaps/usdc-to-xmr', async (req, res) => {
   try {
+    // Create a new USDC to XMR swap (Alice initiates)
     const result = await createUsdcToXmrSwap(req.body);
     res.json(result);
   } catch (error) {
@@ -38,7 +40,9 @@ app.post('/api/swaps/usdc-to-xmr', async (req, res) => {
 
 app.post('/api/swaps/usdc-to-xmr/:swapId/ready', async (req, res) => {
   try {
-    const result = await setUsdcToXmrSwapReady(req.params.swapId);
+    // Set the swap as ready (Alice verifies XMR and calls Ready())
+    // Requires Bob's Monero keys and shared address in the request body
+    const result = await setUsdcToXmrSwapReady(req.params.swapId, req.body);
     res.json(result);
   } catch (error) {
     console.error(error);
@@ -48,7 +52,20 @@ app.post('/api/swaps/usdc-to-xmr/:swapId/ready', async (req, res) => {
 
 app.post('/api/swaps/usdc-to-xmr/:swapId/claim', async (req, res) => {
   try {
-    const result = await claimUsdcToXmrSwap(req.params.swapId);
+    // Claim the swap (either Bob claims USDC or Alice claims XMR)
+    // The claimerType in the request body determines who is claiming
+    const result = await claimUsdcToXmrSwap(req.params.swapId, req.body);
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/swaps/usdc-to-xmr/:swapId/refund', async (req, res) => {
+  try {
+    // Refund the swap (Alice calls Refund())
+    const result = await refundUsdcToXmrSwap(req.params.swapId);
     res.json(result);
   } catch (error) {
     console.error(error);
@@ -147,18 +164,49 @@ app.get('/api/swaps/xmr-to-usdc', (req, res) => {
   }
 });
 
+// Endpoint for sending XMR to a shared address with verification links
+app.post('/api/monero/send-to-address', async (req, res) => {
+  try {
+    const { address, amount } = req.body;
+    
+    if (!address || !amount) {
+      return res.status(400).json({ error: 'Address and amount are required' });
+    }
+    
+    // Import the functions directly here to avoid circular dependencies
+    const { sendXmrToSharedAddress, generateVerificationLinks } = await import('./monero-key-exchange.js');
+    
+    // Send XMR to the address
+    const result = await sendXmrToSharedAddress(address, amount);
+    
+    // Generate verification links
+    const verificationLinks = generateVerificationLinks(result.txHash, address);
+    
+    // Return the result with verification links
+    res.json({
+      ...result,
+      verificationLinks,
+      message: 'Transaction sent successfully. You can verify the transaction using the provided links.'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Register Web3 API routes
 app.use('/api/web3', web3SwapApi);
 
 // Root endpoint for testing
 app.get('/', (req, res) => {
   res.json({
-    message: 'Fungerbil Swap Server is running',
+    message: 'Fungerbil Swap Server is running (Athanor Protocol)',
     endpoints: {
       usdcToXmr: {
         create: 'POST /api/swaps/usdc-to-xmr',
         setReady: 'POST /api/swaps/usdc-to-xmr/:swapId/ready',
         claim: 'POST /api/swaps/usdc-to-xmr/:swapId/claim',
+        refund: 'POST /api/swaps/usdc-to-xmr/:swapId/refund',
         getById: 'GET /api/swaps/usdc-to-xmr/:swapId',
         getAll: 'GET /api/swaps/usdc-to-xmr'
       },
@@ -186,6 +234,10 @@ app.get('/', (req, res) => {
 // Start server with initialized wallet
 async function startServer() {
   try {
+    // Clean up any temporary wallet files from previous runs
+    console.log('Cleaning up temporary wallet files...');
+    cleanupAllTempWalletFiles();
+    
     // Initialize the Monero wallet first
     await initializeMoneroWallet();
     
