@@ -13,10 +13,21 @@ let publicKey = null;
 
 function getProvider() {
   if ("solana" in window) {
-    const provider = window.solana;
-    if (provider.isPhantom) return provider;
+    // Brave and Phantom both inject into window.solana
+    const anyProvider = window.solana;
+
+    // Brave Wallet identifies itself like this:
+    if (anyProvider.isBraveWallet) {
+      return anyProvider;
+    }
+
+    // Phantom identifies itself like this:
+    if (anyProvider.isPhantom) {
+      return anyProvider;
+    }
   }
-  alert("Phantom Wallet not found! Please install it.");
+
+  alert("No Solana wallet found! Please install Phantom or Brave.");
   return null;
 }
 
