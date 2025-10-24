@@ -1,1 +1,1 @@
-/home/remsee/arcium/wrapped-monero-bridge/target/release/libwrapped_monero_bridge.so: /home/remsee/arcium/wrapped-monero-bridge/src/lib.rs
+/home/remsee/arcium/wrapped-monero-bridge/target/release/libwrapped_monero_bridge.rlib: /home/remsee/arcium/wrapped-monero-bridge/src/crypto.rs /home/remsee/arcium/wrapped-monero-bridge/src/ed25519_ops.rs /home/remsee/arcium/wrapped-monero-bridge/src/lib.rs
