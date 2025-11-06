@@ -1,0 +1,29 @@
+[package]
+name = "monero-zk-verifier"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
+solana-program = "=1.16.0"
+groth16-solana = { git = "https://github.com/solana-labs/groth16", branch = "master" }
+spl-token = { version = "3.5.0", features = ['no-entrypoint'] }
+
+[dev-dependencies]
+program-test = "0.1.0"
+solana-program-test = "=1.16.0"
+solana-sdk = "=1.16.0"
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+
+[profile.release.build-override]
+opt-level = 3
+incremental = false
+codegen-units = 1
