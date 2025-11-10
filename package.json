@@ -1,0 +1,46 @@
+{
+  "name": "monero-zk-payment",
+  "version": "2.0.0",
+  "description": "ZK-proof that a Monero payment happened - wallet-agnostic, multi-field copy, browser → zk-SNARK → Solana/EVM",
+  "main": "client/proveMoneroPayment.ts",
+  "scripts": {
+    "build": "npm run build-circuits && npm run build-client",
+    "build-circuits": "circom circuits/monero_payment.circom --r1cs --wasm --sym && snarkjs groth16 setup monero_payment.r1cs pot12_final.ptau monero_payment.pk && snarkjs zkey export verificationkey monero_payment.pk monero_payment.vk",
+    "build-client": "tsc client/proveMoneroPayment.ts",
+    "setup": "npm run download-powers-of-tau && npm run build",
+    "download-powers-of-tau": "snarkjs powersoftau new bn128 12 pot12_0000.ptau -v && snarkjs powersoftau contribute pot12_0000.ptau pot12_0001.ptau --name=\"First contribution\" -v && snarkjs powersoftau prepare phase2 pot12_0001.ptau pot12_final.ptau -v",
+    "verify-sol": "solc onchain/MoneroPaymentVerifier.sol --bin --abi --optimize -o onchain/",
+    "dev": "webpack serve --config webpack.dev.js",
+    "build-demo": "webpack --config webpack.prod.js"
+  },
+  "dependencies": {
+    "@mymonero/mymonero-monero-client": "^3.0.3",
+    "snarkjs": "^0.7.0",
+    "axios": "^1.6.0",
+    "circomlib": "^2.0.5"
+  },
+  "devDependencies": {
+    "circomlib": "^2.0.5",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "html-webpack-plugin": "^5.5.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0",
+    "webpack-dev-server": "^4.15.0",
+    "ts-loader": "^9.4.0",
+    "solc": "^0.8.21"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/example/monero-zk-payment"
+  },
+  "keywords": [
+    "monero",
+    "zk-proof",
+    "privacy",
+    "defi",
+    "solana",
+    "evm"
+  ],
+  "license": "MIT"
+}
