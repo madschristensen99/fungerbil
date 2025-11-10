@@ -1,5 +1,5 @@
 pragma circom 2.1.0;
 
-include "monero_transaction.circom";
+include "monero-real.circom";
 
-component main = MoneroTransactionVerifier();
+component main = MoneroRealVerifier();
