@@ -1,0 +1,25 @@
+{
+  "name": "say_hello",
+  "version": "0.1.0",
+  "description": "A simple hello world bonsol project",
+  "program": {
+    "binary_path": "target/debug/say_hello"
+  },
+  "inputs": [
+    {
+      "name": "name",
+      "type": "string",
+      "description": "Name to greet"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "greeting",
+      "type": "string",
+      "description": "The generated greeting"
+    }
+  ],
+  "constraints": {
+    "max_cycle_count": 1000000
+  }
+}

@@ -1,0 +1,33 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+**/.DS_Store
+
+# Build artifacts
+**/*.rs.bk
+*.pdb
+
+# Logs
+*.log
+
+# Bonsol specific
+*.proof
+*.r0*pped
+*.zk-proof
+
+# Development
+.env
+*.env
+temp/
+tmp/
+
+# Monero verification specific (for future use)
+node_modules/
+monero-bin/
+*.wallet
+*.daemon

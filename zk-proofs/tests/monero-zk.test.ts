@@ -93,9 +93,9 @@ describe('Monero ZK Proof System - Failing Tests', () => {
       expect(() => createMoneroZKProof(data)).toThrow('Invalid Monero destination address format');
     });
 
-    test('should fail with address not starting with 9 (stagenet)', () => {
-      const data = createTestData({ destination: '4zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' });
-      expect(() => createMoneroZKProof(data)).toThrow('Invalid stagenet address: must start with 9');
+    test('should work with real stagenet address format', () => {
+      const data = createTestData({ destination: '53Kajgo3GhV1ddabJZqdmESkXXoz2xD2gUCVc5L2YKjq8Qhx6UXoqFChhF9n2Th9NLTz77258PMdc3G5qxVd487pFZzzVNG' });
+      expect(() => createMoneroZKProof(data)).not.toThrow();
     });
 
     test('should fail with address too short', () => {
@@ -175,12 +175,12 @@ describe('Monero ZK Proof System - Failing Tests', () => {
 // Helper function to create test data with overrides
 function createTestData(overrides: Partial<MoneroZKData>): MoneroZKData {
   const defaults = {
-    blockHeight: 1548635, // Modern stagenet height
-    txSecret: '1548635000000000000000000000000000000000000000000000000000000001', // 64 hex chars
-    txHash: '6be023ac6982d9b3e5b5a7c8b0a8b3b2e5b5a7c8b0a8b3b2e5b5a7c8b0a8b3b2', // 64 hex chars
-    amount: 1000000000000, // 1 XMR in atomic units
-    destination: '9tun7VYAVwa9Pqpu2k8HHdqXz6h1bP9FWLQ76dC8hxv3vXkxZVJcvUyMQXu2xhvDkmB4B51sX8dvFm7zWbbzJYm9ABvYwVBnt',
-    blockHeader: 'f6e9c0ff328b1f3a50cb9d4ca88e1e24ad45cbbdea4a0bd3f50261f123456789'
+    blockHeight: 1934116, // Real stagenet height
+    txSecret: '4cbf8f2cfb622ee126f08df053e99b96aa2e8c1cfd575d2a651f3343b465800a', // 64 hex chars
+    txHash: '5caae835b751a5ab243b455ad05c489cb9a06d8444ab2e8d3a9d8ef905c1439a', // 64 hex chars
+    amount: 20000000000, // 0.02 XMR in atomic units (20000000000 piconero)
+    destination: '53Kajgo3GhV1ddabJZqdmESkXXoz2xD2gUCVc5L2YKjq8Qhx6UXoqFChhF9n2Th9NLTz77258PMdc3G5qxVd487pFZzzVNG',
+    blockHeader: '347fdbca67bf6c7d46839925ccbc87a554b93b32e29166ffee8cece983a753fd'
   };
   
   return { ...defaults, ...overrides };

@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "say_hello",
+    "solana-program"
+]
+
+[workspace.dependencies]
+bonsol-anchor-sdk = "0.2.0"
+anchor-lang = { version = "0.29.0", features = ["init-if-needed"] }
+
+[profile.release]
+overflow-checks = true

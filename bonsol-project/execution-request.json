@@ -1,0 +1,16 @@
+{
+  "imageId": "say_hello",
+  "inputs": [
+    {
+      "kind": "Public",
+      "label": "name",
+      "value": "UmVtc2Vl" 
+    }
+  ],
+  "tip": "1000",
+  "expires": 800,
+  "executionConfig": {
+    "max_cycles": 1000000
+  },
+  "time_to_live": 300
+}
