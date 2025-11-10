@@ -1,0 +1,17 @@
+[package]
+name = "monero-zk-verify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anchor-lang = "0.29.0"
+groth16-solana = "0.2.0"
+sha2 = "0.10"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[profile.release]
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
