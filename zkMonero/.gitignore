@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Circom compilation artifacts
+*.r1cs
+*.sym
+*.wasm
+*_js/
+*_cpp/
+
+# Power of Tau files
+*.ptau
+
+# Proving keys and verification keys
+*.pk
+*.vk
+*.zkey
+
+# Compiled Solidity
+artifacts/
+cache/
+
+# Test coverage
+coverage/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Rust/Anchor
+**/target/
+**/.anchor
+**/.cargo
+**/.rustup
+
+# Cargo
+**/Cargo.lock
+
+# Log files
+*.log
+
+# Coverage reports
+.coverage/
+
+# Temporary files
+*.tmp
+*.temp
