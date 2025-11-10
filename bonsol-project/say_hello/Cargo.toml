@@ -1,0 +1,11 @@
+[package]
+name = "say_hello"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+risc0-zkvm = "1.2"
+serde = { version = "1.0", features = ["derive"] }
+
+[build-dependencies]
+risc0-build = "1.2"

@@ -1,0 +1,13 @@
+[package]
+name = "say_hello-guest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+say_hello = { path = "../../" }
+risc0-zkvm = { version = "1.2", default-features = false }
+
+[[bin]]
+name = "say_hello-guest"
+path = "src/main.rs"
