@@ -1,0 +1,46 @@
+{
+  "name": "monero-transaction-verifier",
+  "version": "1.0.0",
+  "description": "ZK proof verification that a Monero transaction exists in a specific block",
+  "image_id": "monero_tx_verifier",
+  "limit": {
+    "max_cycles": 1000000,
+    "max_size": 1024
+  },
+  "constraints": {
+    "max_cycle_count": 1000000
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "block_header": {
+        "type": "object",
+        "properties": {
+          "height": {"type": "number"},
+          "timestamp": {"type": "number"},
+          "merkle_root": {"type": "string", "format": "hex"},
+          "previous_block_hash": {"type": "string", "format": "hex"},
+          "difficulty": {"type": "string", "format": "hex"}
+        }
+      },
+      "transaction_hash": {"type": "string", "format": "hex"},
+      "merkle_proof": {
+        "type": "array",
+        "items": {"type": "string", "format": "hex"}
+      },
+      "transaction_index": {"type": "number"},
+      "network": {"type": "string", "enum": ["stagenet", "testnet"]}
+    }
+  },
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "tx_hash": {"type": "string", "format": "hex"},
+      "block_hash": {"type": "string", "format": "hex"},
+      "merkle_root": {"type": "string", "format": "hex"},
+      "is_valid": {"type": "boolean"},
+      "height": {"type": "number"},
+      "timestamp": {"type": "number"}
+    }
+  }
+}

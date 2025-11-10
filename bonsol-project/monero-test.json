@@ -1,0 +1,30 @@
+{
+  "test_cases": [
+    {
+      "name": "stagenet_block_100000",
+      "description": "Sample Stagenet block 100000 transaction verification",
+      "block_height": 100000,
+      "network": "stagenet",
+      "block_hash": "8f7a3a1e19b4e0c8b0e0c899b2f2c8e5e4a5e4a5e4a5e4a5e4a5e4a5e4a5",
+      "transaction_hashes": [
+        "111122223333444455556666777788889999aaaabbbbccccddddeeeeffff",
+        "22223333444455556666777788889999aaaabbbbccccddddeeeeffff1111"
+      ],
+      "expected_outputs": {
+        "valid": true,
+        "height": 100000,
+        "network": "stagenet"
+      }
+    }
+  ],
+  "endpoint_config": {
+    "stagenet": {
+      "daemon_url": "https://stagenet.community.rino.io",
+      "explorer_url": "https://stagenet-explorer.moneropulse.org"
+    },
+    "testnet": {
+      "daemon_url": "https://testnet.community.rino.io", 
+      "explorer_url": "https://testnet.xmrchain.net"
+    }
+  }
+}

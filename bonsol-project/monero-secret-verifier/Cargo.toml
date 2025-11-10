@@ -5,11 +5,11 @@ edition = "2021"
 
 [[bin]]
 name = "monero-verifier"
-path = "monero-secret-verifier/src/main.rs"
+path = "src/main.rs"
 
 [lib]
 name = "monero_verifier"
-path = "monero-secret-verifier/src/lib.rs"
+path = "src/lib.rs"
 
 crate-type = ["cdylib", "lib"]
 
