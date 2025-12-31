@@ -216,11 +216,15 @@ async function generateWitness() {
         // Compute derivation = 8 · r · A
         const rA = A.multiply(r);
         const derivation = rA.multiply(8n);
-        const derivationHex = derivation.toHex();
         
-        // Hash: Keccak256(derivation || output_index)
-        const derivationBytes = Buffer.from(derivationHex, 'hex');
-        const hashInput = Buffer.concat([derivationBytes, Buffer.from([outputIndex])]);
+        // CRITICAL: Compress the point to Ed25519 format (32 bytes)
+        // This must match what the circuit computes in S_bits
+        // Ed25519 compressed format: y-coordinate (255 bits) + sign bit of x
+        const derivationCompressed = derivation.toBytes();
+        
+        // Hash: Keccak256(compressed_derivation || output_index)
+        // This matches the circuit: hashForHs = Keccak256(S_bits || output_index)
+        const hashInput = Buffer.concat([Buffer.from(derivationCompressed), Buffer.from([outputIndex])]);
         const hash = keccak256(hashInput);
         
         // Convert hash to scalar (little-endian)
@@ -240,15 +244,45 @@ async function generateWitness() {
         }
         
         console.log(`\n🔐 Step 8.5: Computing H_s scalar (mod L)...`);
-        console.log(`   Derivation (8·r·A): ${derivationHex.substring(0, 32)}...`);
-        console.log(`   Hash: ${hash.toString('hex').substring(0, 32)}...`);
-        console.log(`   Scalar (mod L): ${scalar.toString(16).padStart(64, '0').substring(0, 32)}...`);
+        console.log(`   Derivation (8·r·A) compressed (32 bytes):`);
+        console.log(`     ${Buffer.from(derivationCompressed).toString('hex')}`);
+        console.log(`   Output index: ${outputIndex}`);
+        console.log(`   Hash input (33 bytes): ${hashInput.toString('hex').substring(0, 66)}`);
+        console.log(`   Hash output (32 bytes):`);
+        console.log(`     ${hash.toString('hex')}`);
+        console.log(`   Hash as BigInt: ${BigInt('0x' + hash.toString('hex')).toString(16)}`);
+        console.log(`   Scalar (mod L): ${scalar.toString(16).padStart(64, '0')}`);
+        console.log(`   H_s_scalar bits (first 16): ${H_s_scalar_bits.slice(0, 16).join('')}`);
+        
+        // Compute gamma: Keccak256(Keccak256(S || output_index)) mod L
+        // This matches the circuit's double-hash approach
+        console.log(`\n🔐 Step 8.6: Computing gamma scalar (mod L)...`);
+        console.log(`   First hash (input to second hash, 32 bytes):`);
+        console.log(`     ${hash.toString('hex')}`);
+        const gammaHash = keccak256(hash);
+        console.log(`   Second hash output (32 bytes):`);
+        console.log(`     ${gammaHash.toString('hex')}`);
+        
+        // Convert gamma hash to scalar (little-endian, same as H_s)
+        let gammaScalarBigInt = 0n;
+        for (let i = 0; i < 32; i++) {
+            gammaScalarBigInt |= BigInt(gammaHash[i]) << BigInt(i * 8);
+        }
+        console.log(`   Gamma hash as BigInt (LE): ${gammaScalarBigInt.toString(16)}`);
+        const gammaScalar = gammaScalarBigInt % L;
+        console.log(`   Gamma scalar (mod L): ${gammaScalar.toString(16).padStart(64, '0')}`);
+        
+        const gamma_bits = [];
+        for (let i = 0; i < 255; i++) {
+            gamma_bits.push(((gammaScalar >> BigInt(i)) & 1n).toString());
+        }
+        console.log(`   Gamma_scalar bits (first 16): ${gamma_bits.slice(0, 16).join('')}`);
         
         const witness = {
             // Private inputs
             r: secretKeyBits.slice(0, 256), // Secret key as 256 bits
             v: TX_DATA.amount.toString(), // Amount in piconero
-            gamma: Array(256).fill("0"), // Dummy gamma (verification disabled - we don't have sender's gamma)
+            gamma: gamma_bits, // Gamma scalar: Keccak256(Keccak256(S || i)) mod L
             output_index: outputIndex.toString(), // Output index in transaction
             H_s_scalar: H_s_scalar_bits, // Pre-reduced scalar: Keccak256(8·r·A || i) mod L
             
@@ -307,24 +341,23 @@ async function generateWitness() {
         console.log(`\n✅ Complete witness data saved to ${outputPath}`);
         
         // Also save in a format ready for circuit testing
+        // NOTE: Hash is computed IN-CIRCUIT, but reduction hints are provided
+        // The hints are VERIFIED INDIRECTLY via P and C constraints
+        // If hints are wrong, P_derived ≠ P_compressed or C_computed ≠ C_compressed
         const circuitInput = {
             r: witness.r,
             v: witness.v,
-            gamma: witness.gamma,
             output_index: witness.output_index,
-            H_s_scalar: witness.H_s_scalar,
             A_extended: witness.A_extended,
-            R_extended: witness._metadata.R_extended,
-            P_extended: witness.P_extended,
             B_extended: witness.B_extended,
+            hs_r_hint: witness.H_s_scalar,      // Reduction hint (verified via P constraint)
+            gamma_r_hint: witness.gamma,        // Reduction hint (verified via C constraint)
             R_x: witness.R_x,
             P_compressed: witness.P_compressed,
             C_compressed: witness.C_compressed,
             ecdhAmount: witness.ecdhAmount,
-            B_compressed: witness.B_compressed,
-            monero_tx_hash: witness.monero_tx_hash,
-            bridge_tx_binding: witness.bridge_tx_binding,
-            chain_id: witness.chain_id
+            B_compressed: witness.B_compressed
+            // NOTE: monero_tx_hash, bridge_tx_binding, chain_id not used in v5.6
         };
         
         fs.writeFileSync("input.json", JSON.stringify(circuitInput, null, 2));
