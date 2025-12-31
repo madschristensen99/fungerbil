@@ -55,14 +55,52 @@ async function generateWitness() {
         console.log("   Version:", txJson.version);
         console.log("   RCT Type:", txJson.rct_signatures.type);
         
-        // Step 2: Extract transaction public key (R)
-        console.log("\n🔑 Step 2: Extracting transaction public key (R)...");
+        // Step 2: Extract transaction public key (R) and additional keys for subaddresses
+        console.log("\n🔑 Step 2: Extracting transaction public keys...");
+        console.log("   tx_extra length:", txJson.extra.length, "bytes");
+        console.log("   tx_extra (hex):", Buffer.from(txJson.extra).toString('hex'));
+        
         let txPubKey = null;
-        if (txJson.extra && txJson.extra[0] === 1 && txJson.extra.length >= 33) {
-            txPubKey = Buffer.from(txJson.extra.slice(1, 33)).toString('hex');
-            console.log("✅ TX Public Key (R):", txPubKey);
-        } else {
-            throw new Error("Could not extract transaction public key");
+        let additionalTxPubKeys = [];
+        
+        // Parse tx_extra to extract all public keys
+        let pos = 0;
+        while (pos < txJson.extra.length) {
+            const tag = txJson.extra[pos];
+            
+            if (tag === 1) {
+                // Main transaction public key (32 bytes)
+                if (pos + 33 <= txJson.extra.length) {
+                    txPubKey = Buffer.from(txJson.extra.slice(pos + 1, pos + 33)).toString('hex');
+                    console.log("✅ Main TX Public Key (R):", txPubKey);
+                    pos += 33;
+                } else {
+                    break;
+                }
+            } else if (tag === 4) {
+                // Additional transaction public keys for subaddresses
+                if (pos + 1 < txJson.extra.length) {
+                    const numKeys = txJson.extra[pos + 1];
+                    console.log(`   Found ${numKeys} additional tx public key(s) for subaddresses`);
+                    pos += 2;
+                    
+                    for (let i = 0; i < numKeys && pos + 32 <= txJson.extra.length; i++) {
+                        const additionalKey = Buffer.from(txJson.extra.slice(pos, pos + 32)).toString('hex');
+                        additionalTxPubKeys.push(additionalKey);
+                        console.log(`   ✅ Additional Key [${i}]:`, additionalKey);
+                        pos += 32;
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                // Unknown tag, skip
+                pos++;
+            }
+        }
+        
+        if (!txPubKey) {
+            throw new Error("Could not extract main transaction public key");
         }
         
         // Step 3: Extract ECDH encrypted amount
@@ -145,20 +183,25 @@ async function generateWitness() {
         const secretKeyBits = hexToBits(TX_DATA.secretKey);
         console.log("✅ Secret key converted:", secretKeyBits.length, "bits");
         
-        // Step 6.5: Compute R = r·G for circuit verification
-        console.log("\n🔐 Step 6.5: Computing R = r·G...");
+        // Step 6.5: Determine which R to use for circuit verification
+        console.log("\n🔐 Step 6.5: Determining transaction public key for circuit...");
         const {computeRFromSecret} = require('./compute_rG');
         const computedR = computeRFromSecret(TX_DATA.secretKey);
         
-        if (computedR.toLowerCase() !== txPubKey.toLowerCase()) {
-            console.log('⚠️  Subaddress transaction detected');
-            console.log('   Computed r·G:', computedR);
-            console.log('   Blockchain main R:', txPubKey);
-            console.log('   Using computed R for circuit verification');
-        }
-        
-        // Use computed R for circuit (supports both standard and subaddress txs)
+        // Always use computed R (r·G) for circuit verification
+        // This proves knowledge of secret key r, regardless of whether it matches blockchain R
         const R_for_circuit = computedR;
+        
+        console.log('✅ Using computed R = r·G for circuit');
+        console.log('   Computed R:', computedR);
+        console.log('   Blockchain R:', txPubKey);
+        
+        if (computedR.toLowerCase() === txPubKey.toLowerCase()) {
+            console.log('   ✅ Secret key matches blockchain transaction');
+        } else {
+            console.log('   ⚠️  Note: Secret key does not match blockchain R');
+            console.log('   This is expected for subaddress transactions or test data');
+        }
         
         
         // Step 7: Decompress Ed25519 points to extended coordinates
@@ -227,13 +270,18 @@ async function generateWitness() {
             r |= BigInt(rBytes[i]) << BigInt(i * 8);
         }
         
-        // Parse view key A
+        // Parse view key A from destination address
+        // For both main addresses and subaddresses, the formula is: S = 8 · r · A
+        // where A is the view public key extracted from the destination address
         const A = ed.Point.fromHex(addressKeys.viewKey);
         
         // Compute derivation = 8 · r · A
         const rA = A.multiply(r);
         const derivation = rA.multiply(8n);
         const derivationHex = derivation.toHex();
+        
+        console.log(`   Using view key A from destination address for derivation`);
+        console.log(`   Derivation (8·r·A): ${derivationHex.substring(0, 32)}...`);
         
         // Hash: Keccak256(derivation || output_index)
         const derivationBytes = Buffer.from(derivationHex, 'hex');

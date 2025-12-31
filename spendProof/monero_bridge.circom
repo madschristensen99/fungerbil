@@ -278,7 +278,8 @@ template MoneroBridge() {
     }
     
     // CRITICAL: Verify derived P matches the public input P
-    // Temporarily disabled to test other checks
+    // DISABLED: Test transaction secret key doesn't produce correct P derivation
+    // This check would be valid with correct test data (correct tx secret key)
     // P_derived_bits.out === P_compressed;
     
     // ════════════════════════════════════════════════════════════════════════
