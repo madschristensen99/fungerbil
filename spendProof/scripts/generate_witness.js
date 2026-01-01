@@ -55,14 +55,40 @@ async function generateWitness() {
         console.log("   Version:", txJson.version);
         console.log("   RCT Type:", txJson.rct_signatures.type);
         
-        // Step 2: Extract transaction public key (R)
-        console.log("\n🔑 Step 2: Extracting transaction public key (R)...");
+        // Step 2: Extract transaction public key (R) and additional keys for subaddresses
+        console.log("\n🔑 Step 2: Extracting transaction public keys...");
         let txPubKey = null;
-        if (txJson.extra && txJson.extra[0] === 1 && txJson.extra.length >= 33) {
-            txPubKey = Buffer.from(txJson.extra.slice(1, 33)).toString('hex');
-            console.log("✅ TX Public Key (R):", txPubKey);
-        } else {
-            throw new Error("Could not extract transaction public key");
+        let additionalTxPubKeys = [];
+        
+        // Parse tx_extra to extract main and additional public keys
+        let i = 0;
+        while (i < txJson.extra.length) {
+            const tag = txJson.extra[i];
+            
+            if (tag === 1 && i + 32 < txJson.extra.length) {
+                // Tag 0x01: Main transaction public key
+                txPubKey = Buffer.from(txJson.extra.slice(i + 1, i + 33)).toString('hex');
+                console.log("✅ Main TX Public Key (R):", txPubKey);
+                i += 33;
+            } else if (tag === 4 && i + 1 < txJson.extra.length) {
+                // Tag 0x04: Additional transaction public keys (for subaddresses)
+                const numKeys = txJson.extra[i + 1];
+                console.log(`   Found ${numKeys} additional tx public keys (subaddress transaction)`);
+                i += 2;
+                for (let j = 0; j < numKeys && i + 32 <= txJson.extra.length; j++) {
+                    const additionalKey = Buffer.from(txJson.extra.slice(i, i + 32)).toString('hex');
+                    additionalTxPubKeys.push(additionalKey);
+                    console.log(`   ✅ Additional key [${j}]:`, additionalKey);
+                    i += 32;
+                }
+            } else {
+                // Skip unknown tags
+                i++;
+            }
+        }
+        
+        if (!txPubKey) {
+            throw new Error("Could not extract main transaction public key");
         }
         
         // Step 3: Extract ECDH encrypted amount
@@ -230,10 +256,26 @@ async function generateWitness() {
         // Parse view key A
         const A = ed.Point.fromHex(addressKeys.viewKey);
         
+        // Determine which public key to use for derivation
+        // For subaddresses: use R_additional[output_index] if available
+        // For main address: use main R
+        let derivationPubKey;
+        if (additionalTxPubKeys.length > 0 && outputIndex < additionalTxPubKeys.length) {
+            console.log(`\n🔑 Using additional tx key [${outputIndex}] for subaddress derivation`);
+            derivationPubKey = ed.Point.fromHex(additionalTxPubKeys[outputIndex]);
+        } else {
+            console.log(`\n🔑 Using main tx key for standard address derivation`);
+            derivationPubKey = ed.Point.fromHex(txPubKey);
+        }
+        
         // Compute derivation = 8 · r · A
+        // Note: For the circuit, we still compute S = 8·r·A from the secret key
+        // But for verification, we need to use the correct R
         const rA = A.multiply(r);
         const derivation = rA.multiply(8n);
         const derivationHex = derivation.toHex();
+        
+        console.log(`   Derivation (8·r·A): ${derivationHex.substring(0, 32)}...`);
         
         // Hash: Keccak256(derivation || output_index)
         const derivationBytes = Buffer.from(derivationHex, 'hex');
@@ -324,17 +366,11 @@ async function generateWitness() {
         
         const witness = {
             // Private inputs
-            r: secretKeyBits.slice(0, 255), // Secret key as 255 bits (FIXED)
-            v: TX_DATA.amount.toString(), // Amount in piconero
+            r: secretKeyBits.slice(0, 255), // Secret key as 255 bits
             output_index: outputIndex.toString(), // Output index in transaction
-            H_s_scalar: H_s_scalar_bits, // Pre-reduced scalar: Keccak256(8·r·A || i) mod L
+            H_s_scalar: H_s_scalar_bits, // Hint: Keccak256(S || i) mod L
             
-            // Pre-computed shared secret (saves ~7.5k constraints)
-            S_extended: S_formatted, // 8·r·A in extended coordinates
-            
-            // Pre-decompressed points (circuit verifies they compress correctly)
-            P_extended: P_formatted, // Destination address in extended coordinates
-            // Note: A, R, B will be decompressed from public inputs in circuit
+            // SECURITY NOTE: S is computed in-circuit from r and A
             
             // Public inputs - Compressed points as field elements
             R_x: R_x_bigint.toString(), // First 255 bits of compressed R
@@ -361,6 +397,7 @@ async function generateWitness() {
                 return (bBigInt & ((1n << 255n) - 1n)).toString();
             })(),
             monero_tx_hash: (txHashBigInt % (1n << 252n)).toString(), // Reduced to fit field
+            v: TX_DATA.amount.toString(), // Amount in piconero (public input for verification)
             
             // Metadata for reference (extended coordinates for debugging)
             _metadata: {
@@ -385,17 +422,15 @@ async function generateWitness() {
         // Also save in a format ready for circuit testing
         const circuitInput = {
             r: witness.r,
-            v: witness.v,
             output_index: witness.output_index,
             H_s_scalar: witness.H_s_scalar,
-            S_extended: witness.S_extended,
-            P_extended: witness.P_extended,
             R_x: witness.R_x,
             P_compressed: witness.P_compressed,
             ecdhAmount: witness.ecdhAmount,
             A_compressed: witness.A_compressed,
             B_compressed: witness.B_compressed,
-            monero_tx_hash: witness.monero_tx_hash
+            monero_tx_hash: witness.monero_tx_hash,
+            v: witness.v
         };
         
         fs.writeFileSync("input.json", JSON.stringify(circuitInput, null, 2));
