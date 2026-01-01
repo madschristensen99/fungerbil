@@ -232,43 +232,198 @@ template LessThanL() {
     out <== lt[0];
 }
 
-// Proper scalar reduction modulo L using conditional subtraction
+// ════════════════════════════════════════════════════════════════════════════
+// FIXED: Secure Scalar Arithmetic with Witness Generation
+// ════════════════════════════════════════════════════════════════════════════
+
+// Standard template to pack bits into 64-bit limbs
+template Bits2Limbs64(nBits, nLimbs) {
+    signal input bits[nBits];
+    signal output limbs[nLimbs];
+    
+    component b2n[nLimbs];
+    
+    for (var i = 0; i < nLimbs; i++) {
+        b2n[i] = Bits2Num(64);
+        for (var j = 0; j < 64; j++) {
+            if (i * 64 + j < nBits) {
+                b2n[i].in[j] <== bits[i * 64 + j];
+            } else {
+                b2n[i].in[j] <== 0;
+            }
+        }
+        limbs[i] <== b2n[i].out;
+    }
+}
+
+// Proper scalar reduction modulo L using long division constraints
 // Input: 512-bit hash output
 // Output: 253-bit scalar in range [0, L)
 template ScalarReduceModL() {
     signal input in[512];
     signal output out[253];
 
-    // For a 512-bit input, we need Barrett reduction
-    // This is a simplified version that works for hash outputs
+    // 1. Constants
+    // L = 2^252 + 27742317777372353535851937790883648493
+    var L_limbs[4] = ed25519_L_limbs();
+    
+    // L as a single large integer (fits in BN254 scalar field)
+    var L_scalar = 7237005577332262213973186563042994240857116359379907606001950938285454250989;
 
-    // Step 1: Take the lower 253 bits
-    signal candidate[253];
-    for (var i = 0; i < 253; i++) {
-        candidate[i] <== in[i];
+    // 2. Convert Input to Limbs (8 x 64-bit) for Constraints
+    component inLimbs = Bits2Limbs64(512, 8);
+    for(var i=0; i<512; i++) inLimbs.bits[i] <== in[i];
+
+    // 3. Witness Computation (Calculate Q and R in Circuit Variables)
+    // Perform bitwise long division to find Quotient and Remainder
+    
+    var rem = 0;
+    var q_limbs[5];
+    for(var k=0; k<5; k++) q_limbs[k] = 0;
+    
+    // Bitwise Division Loop (MSB to LSB)
+    for (var i = 511; i >= 0; i--) {
+        // R = R << 1 | bit
+        rem = rem * 2;
+        rem = rem + in[i];
+        
+        var q_bit = 0;
+        
+        // if R >= L: R = R - L; Q_bit = 1
+        if (rem >= L_scalar) {
+            rem = rem - L_scalar;
+            q_bit = 1;
+        }
+        
+        // Q = Q << 1 | q_bit (Multi-limb shift)
+        var carry_shift = 0;
+        for (var k = 0; k < 5; k++) {
+            var val = q_limbs[k] * 2 + carry_shift;
+            
+            // Add q_bit to LSB of first limb
+            if (k == 0) {
+                val = val + q_bit;
+            }
+            
+            // Keep lower 64 bits
+            var lower = val % 18446744073709551616; // 2^64
+            var upper = (val - lower) / 18446744073709551616;
+            
+            q_limbs[k] = lower;
+            carry_shift = upper;
+        }
+    }
+    
+    // Decompose calculated Remainder (rem) into 4 64-bit limbs
+    var r_limbs[4];
+    var temp_rem = rem;
+    for (var k = 0; k < 4; k++) {
+        r_limbs[k] = temp_rem % 18446744073709551616;
+        temp_rem = (temp_rem - r_limbs[k]) / 18446744073709551616;
     }
 
-    // Step 2: Check if candidate < L
-    component checkLt = LessThanL();
-    for (var i = 0; i < 253; i++) {
-        checkLt.in[i] <== candidate[i];
+    // 4. Assign Witness to Signals
+    signal quotient[5];
+    signal remainder[4];
+    
+    for (var i = 0; i < 5; i++) quotient[i] <-- q_limbs[i];
+    for (var i = 0; i < 4; i++) remainder[i] <-- r_limbs[i];
+
+    // 5. Verification Constraints: Input = Quotient * L + Remainder
+    
+    // 5a. Verify R < L
+    component remToBits[4];
+    signal remBits[256];
+    
+    for(var i=0; i<4; i++) {
+        remToBits[i] = Num2Bits(64);
+        remToBits[i].in <== remainder[i];
+        
+        for(var j=0; j<64; j++) {
+            remBits[i*64 + j] <== remToBits[i].out[j];
+        }
     }
 
-    // Step 3: If candidate >= L, we need to reduce
-    // For cryptographic hash outputs, the probability of needing
-    // multiple reductions is negligible, but we handle one reduction
+    component ltL = LessThanL();
+    for(var i=0; i<253; i++) ltL.in[i] <== remBits[i];
+    ltL.out === 1;
 
-    // Compute candidate - L (this is complex in circuits)
-    // For now, we use a different approach: constrain the output
-    // to be less than L and equal to input mod L
+    // Ensure top bits are 0 (validity check)
+    remBits[253] === 0;
+    remBits[254] === 0;
+    remBits[255] === 0;
 
-    // Simplified approach: clear the top bits to ensure < L
-    // This introduces slight bias but is secure for most applications
-    for (var i = 0; i < 252; i++) {
-        out[i] <== in[i];
+    // Output wiring
+    for(var i=0; i<253; i++) out[i] <== remBits[i];
+
+    // 5b. Verify Polynomial Multiplication with Carries
+    
+    signal carry[9]; 
+    carry[0] <== 0;
+
+    // Calculate carry witness values (unrolled for Circom compatibility)
+    var carry_vals[9];
+    carry_vals[0] = 0;
+    
+    // Compute all carry values using var arithmetic
+    for (var i = 0; i < 8; i++) {
+        var pProd_val = 0;
+        if (i==0) pProd_val = q_limbs[0]*L_limbs[0];
+        if (i==1) pProd_val = q_limbs[0]*L_limbs[1] + q_limbs[1]*L_limbs[0];
+        if (i==2) pProd_val = q_limbs[0]*L_limbs[2] + q_limbs[1]*L_limbs[1] + q_limbs[2]*L_limbs[0];
+        if (i==3) pProd_val = q_limbs[0]*L_limbs[3] + q_limbs[1]*L_limbs[2] + q_limbs[2]*L_limbs[1] + q_limbs[3]*L_limbs[0];
+        if (i==4) pProd_val = q_limbs[1]*L_limbs[3] + q_limbs[2]*L_limbs[2] + q_limbs[3]*L_limbs[1] + q_limbs[4]*L_limbs[0];
+        if (i==5) pProd_val = q_limbs[2]*L_limbs[3] + q_limbs[3]*L_limbs[2] + q_limbs[4]*L_limbs[1];
+        if (i==6) pProd_val = q_limbs[3]*L_limbs[3] + q_limbs[4]*L_limbs[2];
+        if (i==7) pProd_val = q_limbs[4]*L_limbs[3];
+        
+        var current_rem = 0;
+        if (i < 4) current_rem = r_limbs[i];
+        
+        // Reconstruct input limb value from bits
+        var in_limb_val = 0;
+        var p2 = 1;
+        for(var j=0; j<64; j++) {
+            in_limb_val = in_limb_val + in[i*64+j] * p2;
+            p2 = p2 * 2;
+        }
+        
+        var sum_poly = pProd_val + current_rem + carry_vals[i] - in_limb_val;
+        carry_vals[i+1] = sum_poly / 18446744073709551616;
     }
-    // Bit 252 must be 0 to ensure value < 2^252 < L
-    out[252] <== 0;
+    
+    // Assign all carry signals
+    for (var i = 1; i < 9; i++) {
+        carry[i] <-- carry_vals[i];
+    }
+    
+    // Enforce constraints (fully unrolled)
+    signal pProd0 <== quotient[0] * L_limbs[0];
+    pProd0 + remainder[0] - inLimbs.limbs[0] === carry[1] * 18446744073709551616;
+
+    signal pProd1 <== quotient[0] * L_limbs[1] + quotient[1] * L_limbs[0];
+    pProd1 + remainder[1] + carry[1] - inLimbs.limbs[1] === carry[2] * 18446744073709551616;
+
+    signal pProd2 <== quotient[0] * L_limbs[2] + quotient[1] * L_limbs[1] + quotient[2] * L_limbs[0];
+    pProd2 + remainder[2] + carry[2] - inLimbs.limbs[2] === carry[3] * 18446744073709551616;
+
+    signal pProd3 <== quotient[0] * L_limbs[3] + quotient[1] * L_limbs[2] + quotient[2] * L_limbs[1] + quotient[3] * L_limbs[0];
+    pProd3 + remainder[3] + carry[3] - inLimbs.limbs[3] === carry[4] * 18446744073709551616;
+
+    signal pProd4 <== quotient[1] * L_limbs[3] + quotient[2] * L_limbs[2] + quotient[3] * L_limbs[1] + quotient[4] * L_limbs[0];
+    pProd4 + carry[4] - inLimbs.limbs[4] === carry[5] * 18446744073709551616;
+
+    signal pProd5 <== quotient[2] * L_limbs[3] + quotient[3] * L_limbs[2] + quotient[4] * L_limbs[1];
+    pProd5 + carry[5] - inLimbs.limbs[5] === carry[6] * 18446744073709551616;
+
+    signal pProd6 <== quotient[3] * L_limbs[3] + quotient[4] * L_limbs[2];
+    pProd6 + carry[6] - inLimbs.limbs[6] === carry[7] * 18446744073709551616;
+
+    signal pProd7 <== quotient[4] * L_limbs[3];
+    pProd7 + carry[7] - inLimbs.limbs[7] === carry[8] * 18446744073709551616;
+
+    // Final carry must be 0 (no overflow)
+    carry[8] === 0;
 }
 
 // Verify a scalar is in valid range [0, L)
