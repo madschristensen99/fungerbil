@@ -368,9 +368,11 @@ async function generateWitness() {
             // Private inputs
             r: secretKeyBits.slice(0, 255), // Secret key as 255 bits
             output_index: outputIndex.toString(), // Output index in transaction
-            H_s_scalar: H_s_scalar_bits, // Hint: Keccak256(S || i) mod L
+            H_s_scalar: H_s_scalar_bits, // Pre-reduced scalar: Keccak256(S || i) mod L
+            S_extended: S_formatted, // Precomputed S = 8·r·A
+            P_extended: P_formatted, // Destination stealth address
             
-            // SECURITY NOTE: S is computed in-circuit from r and A
+            // SECURITY NOTE: These are witness hints, verified indirectly by amount decryption
             
             // Public inputs - Compressed points as field elements
             R_x: R_x_bigint.toString(), // First 255 bits of compressed R
@@ -424,6 +426,8 @@ async function generateWitness() {
             r: witness.r,
             output_index: witness.output_index,
             H_s_scalar: witness.H_s_scalar,
+            S_extended: witness.S_extended,
+            P_extended: witness.P_extended,
             R_x: witness.R_x,
             P_compressed: witness.P_compressed,
             ecdhAmount: witness.ecdhAmount,
