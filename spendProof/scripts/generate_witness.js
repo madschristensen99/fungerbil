@@ -381,7 +381,7 @@ async function generateWitness() {
             output_index: witness.output_index,
             H_s_scalar: witness.H_s_scalar,
             P_extended: witness.P_extended,
-            R_x: witness.R_x,
+            R_compressed: witness.R_x, // Renamed from R_x to R_compressed
             P_compressed: witness.P_compressed,
             ecdhAmount: witness.ecdhAmount,
             A_compressed: witness.A_compressed,
