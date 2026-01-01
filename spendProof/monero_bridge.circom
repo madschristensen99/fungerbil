@@ -76,13 +76,11 @@ template MoneroBridge() {
     // PRIVATE INPUTS (witnesses - never revealed on-chain)
     // ════════════════════════════════════════════════════════════════════════
     
-    signal input r[255];            // Transaction secret key (255-bit scalar) - FIXED
+    signal input r[255];            // Transaction secret key (255-bit scalar)
     signal input v;                 // Amount in atomic piconero (64 bits)
     signal input output_index;      // Output index in transaction (0, 1, 2, ...)
-    signal input H_s_scalar[255];   // ⭐️ Pre-reduced scalar: Keccak256(8·r·A || i) mod L
-    signal input S_extended[4][3];  // ⭐️ Precomputed S = 8·r·A (ECDH shared secret)
-    signal input P_extended[4][3];  // Destination stealth address (extended coords)
-    // Note: A, R, B will be decompressed from public inputs to save constraints
+    // Note: S, H_s_scalar, and P will be computed in-circuit (not witness inputs)
+    // Note: A, B will be decompressed from public inputs
     
     // ════════════════════════════════════════════════════════════════════════
     // PUBLIC INPUTS (verified on-chain by Solidity contract)
@@ -152,25 +150,7 @@ template MoneroBridge() {
     // 3. R compresses to the public R_x from the transaction
     
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 2: Verify destination address P compresses correctly
-    // ════════════════════════════════════════════════════════════════════════
-    
-    component compressP = PointCompress();
-    for (var i = 0; i < 4; i++) {
-        for (var j = 0; j < 3; j++) {
-            compressP.P[i][j] <== P_extended[i][j];
-        }
-    }
-    
-    component P_compressed_bits = Bits2Num(255);
-    for (var i = 0; i < 255; i++) {
-        P_compressed_bits.in[i] <== compressP.out[i];
-    }
-    P_compressed_bits.out === P_compressed;
-    
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 3: Decompress LP keys and verify S = 8·r·A (OPTIMIZED)
-    // CRITICAL: This prevents users from claiming they sent to LP when they sent elsewhere
+    // STEP 2: Decompress LP keys
     // ════════════════════════════════════════════════════════════════════════
     
     // Decompress A from public input A_compressed (saves ~3k constraints vs passing extended)
@@ -192,12 +172,52 @@ template MoneroBridge() {
     }
     decompressB.in[255] <== 0;
     
-    // ⭐️ OPTIMIZATION: Use precomputed S_extended instead of computing S = 8·r·A
-    // This saves ~7.5k constraints (1 ScalarMul + 3 PointAdds)
-    // The witness generator computes S = 8·r·A and passes it as S_extended
-    // We just verify it compresses correctly
+    // COMPUTE S = 8·r·A IN-CIRCUIT (prevents forgery)
+    // Step 1: Compute r·A
+    component computeRA = ScalarMul();
+    for (var i = 0; i < 255; i++) {
+        computeRA.s[i] <== r[i];
+    }
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            computeRA.P[i][j] <== decompressA.out[i][j];
+        }
+    }
     
-    // Compress S to get S.x for verification
+    // Step 2: Double three times to get 8·r·A
+    component double1 = PointAdd();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            double1.P[i][j] <== computeRA.sP[i][j];
+            double1.Q[i][j] <== computeRA.sP[i][j];
+        }
+    }
+    
+    component double2 = PointAdd();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            double2.P[i][j] <== double1.R[i][j];
+            double2.Q[i][j] <== double1.R[i][j];
+        }
+    }
+    
+    component double3 = PointAdd();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            double3.P[i][j] <== double2.R[i][j];
+            double3.Q[i][j] <== double2.R[i][j];
+        }
+    }
+    
+    // S = 8·r·A (computed in-circuit, cannot be forged)
+    signal S_extended[4][3];
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            S_extended[i][j] <== double3.R[i][j];
+        }
+    }
+    
+    // Compress S for hashing
     component compressS = PointCompress();
     for (var i = 0; i < 4; i++) {
         for (var j = 0; j < 3; j++) {
@@ -205,22 +225,71 @@ template MoneroBridge() {
         }
     }
     
-    // Pack S.x into bits for later use
-    signal S_x_bits[256];
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 3.4: Compute H_s_scalar = Keccak256(S || output_index) [first 255 bits]
+    // ════════════════════════════════════════════════════════════════════════
+    // CRITICAL: Must compute H_s in-circuit to prevent destination forgery
+    // Note: We use first 255 bits (approximates mod L with 87.5% success rate)
+    // TODO: Add proper Barrett reduction for 100% compatibility
+    
+    // Convert output_index to 8 bits
+    component outputIndexBits = Num2Bits(8);
+    outputIndexBits.in <== output_index;
+    
+    // Hash: Keccak256(S || output_index)
+    component hashForHs = Keccak(264, 256);  // 256 bits (S compressed) + 8 bits (index)
     for (var i = 0; i < 256; i++) {
-        S_x_bits[i] <== compressS.out[i];
+        hashForHs.in[i] <== compressS.out[i];
+    }
+    for (var i = 0; i < 8; i++) {
+        hashForHs.in[256 + i] <== outputIndexBits.out[i];
+    }
+    
+    // Extract H_s_scalar (first 255 bits)
+    signal H_s_scalar[255];
+    for (var i = 0; i < 255; i++) {
+        H_s_scalar[i] <== hashForHs.out[i];
     }
     
     // ════════════════════════════════════════════════════════════════════════
-    // STEP 3.5: Derive and verify destination address P = H_s(S) · G + B
-    // This proves the destination address matches the stealth address derivation
+    // STEP 3.5: Derive and verify destination address P = H_s·G + B
     // ════════════════════════════════════════════════════════════════════════
+    // CRITICAL: Proves destination address was correctly derived
     
-    // NOTE: P (destination address) verification is handled on line 168
-    // We verify that the witness-provided P_extended compresses to the public P_compressed.
-    // This is sufficient to prove the destination is correct.
-    // An alternative approach would be to derive P = H_s(8·r·A || i) · G + B,
-    // but that adds ~2.3M constraints and has byte-order compatibility issues.
+    // Compute H_s·G
+    component computeHsG = ScalarMul();
+    for (var i = 0; i < 255; i++) {
+        computeHsG.s[i] <== H_s_scalar[i];
+    }
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            computeHsG.P[i][j] <== G[i][j];
+        }
+    }
+    
+    // Add B: P = H_s·G + B
+    component addB = PointAdd();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            addB.P[i][j] <== computeHsG.sP[i][j];
+            addB.Q[i][j] <== decompressB.out[i][j];
+        }
+    }
+    
+    // Compress derived P
+    component compressDerivedP = PointCompress();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            compressDerivedP.P[i][j] <== addB.R[i][j];
+        }
+    }
+    
+    // Verify derived P matches public P_compressed
+    component derivedP_bits = Bits2Num(255);
+    for (var i = 0; i < 255; i++) {
+        derivedP_bits.in[i] <== compressDerivedP.out[i];
+    }
+    derivedP_bits.out === P_compressed;
     
     // ════════════════════════════════════════════════════════════════════════
     // STEP 4: Decrypt and verify amount from ecdhAmount
