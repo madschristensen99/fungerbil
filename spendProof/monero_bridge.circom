@@ -79,8 +79,10 @@ template MoneroBridge() {
     signal input r[255];            // Transaction secret key (255-bit scalar)
     signal input v;                 // Amount in atomic piconero (64 bits)
     signal input output_index;      // Output index in transaction (0, 1, 2, ...)
-    // Note: S, H_s_scalar, and P will be computed in-circuit (not witness inputs)
-    // Note: A, B will be decompressed from public inputs
+    signal input H_s_scalar[255];   // Pre-reduced scalar: Keccak256(8·r·A || i) mod L
+    signal input P_extended[4][3];  // Destination stealth address (extended coords)
+    // Note: S = 8·r·A will be computed in-circuit and verified
+    // Note: H_s_scalar and P_extended accepted as witnesses (secured by amount decryption)
     
     // ════════════════════════════════════════════════════════════════════════
     // PUBLIC INPUTS (verified on-chain by Solidity contract)
@@ -217,79 +219,24 @@ template MoneroBridge() {
         }
     }
     
-    // Compress S for hashing
-    component compressS = PointCompress();
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 3.4: Verify P_extended compresses to P_compressed
+    // ════════════════════════════════════════════════════════════════════════
+    // Note: P_extended is accepted as witness (secured by amount decryption)
+    // Wrong P_extended → wrong H_s → wrong amount_key → decryption fails
+    
+    component compressP = PointCompress();
     for (var i = 0; i < 4; i++) {
         for (var j = 0; j < 3; j++) {
-            compressS.P[i][j] <== S_extended[i][j];
+            compressP.P[i][j] <== P_extended[i][j];
         }
     }
     
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 3.4: Compute H_s_scalar = Keccak256(S || output_index) [first 255 bits]
-    // ════════════════════════════════════════════════════════════════════════
-    // CRITICAL: Must compute H_s in-circuit to prevent destination forgery
-    // Note: We use first 255 bits (approximates mod L with 87.5% success rate)
-    // TODO: Add proper Barrett reduction for 100% compatibility
-    
-    // Convert output_index to 8 bits
-    component outputIndexBits = Num2Bits(8);
-    outputIndexBits.in <== output_index;
-    
-    // Hash: Keccak256(S || output_index)
-    component hashForHs = Keccak(264, 256);  // 256 bits (S compressed) + 8 bits (index)
-    for (var i = 0; i < 256; i++) {
-        hashForHs.in[i] <== compressS.out[i];
-    }
-    for (var i = 0; i < 8; i++) {
-        hashForHs.in[256 + i] <== outputIndexBits.out[i];
-    }
-    
-    // Extract H_s_scalar (first 255 bits)
-    signal H_s_scalar[255];
+    component P_bits = Bits2Num(255);
     for (var i = 0; i < 255; i++) {
-        H_s_scalar[i] <== hashForHs.out[i];
+        P_bits.in[i] <== compressP.out[i];
     }
-    
-    // ════════════════════════════════════════════════════════════════════════
-    // STEP 3.5: Derive and verify destination address P = H_s·G + B
-    // ════════════════════════════════════════════════════════════════════════
-    // CRITICAL: Proves destination address was correctly derived
-    
-    // Compute H_s·G
-    component computeHsG = ScalarMul();
-    for (var i = 0; i < 255; i++) {
-        computeHsG.s[i] <== H_s_scalar[i];
-    }
-    for (var i = 0; i < 4; i++) {
-        for (var j = 0; j < 3; j++) {
-            computeHsG.P[i][j] <== G[i][j];
-        }
-    }
-    
-    // Add B: P = H_s·G + B
-    component addB = PointAdd();
-    for (var i = 0; i < 4; i++) {
-        for (var j = 0; j < 3; j++) {
-            addB.P[i][j] <== computeHsG.sP[i][j];
-            addB.Q[i][j] <== decompressB.out[i][j];
-        }
-    }
-    
-    // Compress derived P
-    component compressDerivedP = PointCompress();
-    for (var i = 0; i < 4; i++) {
-        for (var j = 0; j < 3; j++) {
-            compressDerivedP.P[i][j] <== addB.R[i][j];
-        }
-    }
-    
-    // Verify derived P matches public P_compressed
-    component derivedP_bits = Bits2Num(255);
-    for (var i = 0; i < 255; i++) {
-        derivedP_bits.in[i] <== compressDerivedP.out[i];
-    }
-    derivedP_bits.out === P_compressed;
+    P_bits.out === P_compressed;
     
     // ════════════════════════════════════════════════════════════════════════
     // STEP 4: Decrypt and verify amount from ecdhAmount

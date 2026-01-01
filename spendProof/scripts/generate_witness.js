@@ -327,7 +327,9 @@ async function generateWitness() {
             r: secretKeyBits.slice(0, 255), // Secret key as 255 bits
             v: TX_DATA.amount.toString(), // Amount in piconero
             output_index: outputIndex.toString(), // Output index in transaction
-            // Note: S, H_s_scalar, and P are now computed in-circuit (not witness inputs)
+            H_s_scalar: H_s_scalar_bits, // Pre-reduced scalar: Keccak256(8·r·A || i) mod L
+            P_extended: P_formatted, // Destination address in extended coordinates
+            // Note: S = 8·r·A is computed in-circuit for verification
             
             // Public inputs - Compressed points as field elements
             R_x: R_x_bigint.toString(), // First 255 bits of compressed R
@@ -380,6 +382,8 @@ async function generateWitness() {
             r: witness.r,
             v: witness.v,
             output_index: witness.output_index,
+            H_s_scalar: witness.H_s_scalar,
+            P_extended: witness.P_extended,
             R_x: witness.R_x,
             P_compressed: witness.P_compressed,
             ecdhAmount: witness.ecdhAmount,
