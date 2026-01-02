@@ -4,13 +4,18 @@ node_modules/
 # Build artifacts
 build/
 monero_bridge_js/
+monero_bridge_light_js/
+monero_bridge_cpp/
 *.r1cs
 *.sym
 *.wtns
 *.zkey
 *.json.abi
-verification_key.json
-proof.json
+verification_key*.json
+proof*.json
+public*.json
+*.ptau
+proof_generation_log.txt
 
 # Witness and input files
 input.json
