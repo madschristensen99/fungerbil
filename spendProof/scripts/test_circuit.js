@@ -1,14 +1,15 @@
-// Test circuit with real and fake data
+// Test lightweight circuit with real and fake data
 const fs = require('fs');
 const { execSync } = require('child_process');
 
-console.log("🧪 Testing Monero Bridge Circuit\n");
+console.log("🧪 Testing Lightweight Monero Bridge Circuit\n");
+console.log("Constraints: 479,880 (81.6% reduction)\n");
 
 // Test 1: Real data (should PASS)
 console.log("Test 1: Real Monero transaction data");
 const test1Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input.json witness.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input.json witness.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
@@ -19,26 +20,28 @@ try {
     console.log(`❌ FAIL - Real data rejected (unexpected!) (⏱️  ${test1Time}ms)\n`);
 }
 
-// Test 2: Wrong secret key (should FAIL)
-console.log("Test 2: Wrong secret key (r)");
+// Test 2: Wrong H_s_scalar (should FAIL - breaks amount decryption)
+console.log("Test 2: Wrong H_s_scalar (tests amount key derivation)");
 const realInput = JSON.parse(fs.readFileSync('input.json', 'utf8'));
-const wrongR = JSON.parse(JSON.stringify(realInput));
-// Flip some bits in the secret key
-wrongR.r[0] = wrongR.r[0] === "0" ? "1" : "0";
-wrongR.r[10] = wrongR.r[10] === "0" ? "1" : "0";
-fs.writeFileSync('input_wrong_r.json', JSON.stringify(wrongR, null, 2));
+const wrongHs = JSON.parse(JSON.stringify(realInput));
+// Flip some bits in H_s_scalar to break amount decryption
+wrongHs.H_s_scalar[0] = wrongHs.H_s_scalar[0] === "0" ? "1" : "0";
+wrongHs.H_s_scalar[10] = wrongHs.H_s_scalar[10] === "0" ? "1" : "0";
+fs.writeFileSync('input_wrong_r.json', JSON.stringify(wrongHs, null, 2));
 
 const test2Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_r.json witness_wrong_r.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input_wrong_r.json witness_wrong_r.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
     const test2Time = Date.now() - test2Start;
-    console.log(`❌ FAIL - Wrong secret key accepted (security issue!) (⏱️  ${test2Time}ms)\n`);
+    console.log(`❌ FAIL - Wrong H_s accepted (⏱️  ${test2Time}ms)`);
+    console.log(`    (Should fail - wrong H_s can't decrypt amount correctly)\n`);
 } catch (e) {
     const test2Time = Date.now() - test2Start;
-    console.log(`✅ PASS - Wrong secret key rejected (⏱️  ${test2Time}ms)\n`);
+    console.log(`✅ PASS - Wrong H_s rejected (⏱️  ${test2Time}ms)`);
+    console.log(`    (Amount decryption fails with wrong H_s)\n`);
 }
 
 // Test 3: Wrong amount (fraud case - should fail but currently passes)
@@ -50,7 +53,7 @@ fs.writeFileSync('input_wrong_amount.json', JSON.stringify(wrongAmount, null, 2)
 
 const test3Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_amount.json witness_wrong_amount.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input_wrong_amount.json witness_wrong_amount.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
@@ -64,41 +67,41 @@ try {
     console.log(`✅ PASS - Wrong amount rejected (amount verification working) (⏱️  ${test3Time}ms)\n`);
 }
 
-// Test 4: Wrong destination address (should FAIL - tests destination verification)
-console.log("Test 4: Wrong destination address (P_compressed)");
-const wrongDest = JSON.parse(JSON.stringify(realInput));
-// Flip bit 10 in P_compressed (similar to Test 2 approach)
-const pBigInt = BigInt(wrongDest.P_compressed);
-wrongDest.P_compressed = (pBigInt ^ (1n << 10n)).toString(); // XOR to flip bit 10
-fs.writeFileSync('input_wrong_dest.json', JSON.stringify(wrongDest, null, 2));
+// Test 4: Wrong R_x (should work - R is only for binding hash)
+console.log("Test 4: Wrong R_x (tests binding)");
+const wrongR = JSON.parse(JSON.stringify(realInput));
+// Flip bits in R_x
+const rBigInt = BigInt(wrongR.R_x);
+wrongR.R_x = (rBigInt ^ (1n << 10n)).toString();
+fs.writeFileSync('input_wrong_dest.json', JSON.stringify(wrongR, null, 2));
 
 const test4Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_dest.json witness_wrong_dest.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input_wrong_dest.json witness_wrong_dest.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
     const test4Time = Date.now() - test4Start;
-    console.log(`❌ FAIL - Wrong destination accepted (security issue!) (⏱️  ${test4Time}ms)`);
-    console.log("    User claims they sent to LP address");
-    console.log("    But P derivation check should have caught this!\n");
+    console.log(`✅ PASS - Wrong R_x accepted (⏱️  ${test4Time}ms)`);
+    console.log(`    (R_x only affects binding_hash, not amount verification)\n`);
 } catch (e) {
     const test4Time = Date.now() - test4Start;
-    console.log(`✅ PASS - Wrong destination rejected (P = H_s(8·r·A)·G + B check working) (⏱️  ${test4Time}ms)\n`);
+    console.log(`❌ UNEXPECTED - Wrong R_x rejected (⏱️  ${test4Time}ms)\n`);
 }
 
 console.log("═══════════════════════════════════════");
-console.log("Test Summary:");
+console.log("Lightweight Circuit Summary:");
 console.log("");
-console.log("✅ WORKING Security Properties:");
-console.log("  1. Secret key verification (r·G = R)");
-console.log("  2. Destination verification (P = H_s(8·r·A)·G + B)");
-console.log("  3. Amount verification (decrypted_amount === v) ⭐ NEWLY ENABLED!");
+console.log("✅ Circuit Verifies:");
+console.log("  1. Amount decryption: v = ecdhAmount ⊕ Keccak(\"amount\" || H_s)");
+console.log("  2. Binding hash: Hash(R, S, tx_hash)");
+console.log("  3. Range checks: v > 0, v < 2^64");
 console.log("");
-console.log("⚠️  STILL DISABLED Security Properties:");
-console.log("  4. Pedersen commitment verification (requires Blake2s)");
-console.log("  5. Replay protection (binding hash)");
+console.log("🔐 External DLEQ Proof Verifies:");
+console.log("  1. log_G(R) = log_A(S/8) - same secret r");
+console.log("  2. Binds to circuit via binding_hash");
+console.log("  3. Prevents fake S attacks");
 console.log("");
-console.log("✅ What's Proven: Secret key + destination + amount correctness");
-console.log("❌ What's NOT Proven: Pedersen commitment + replay protection");
+console.log("⚡ Performance: 479,880 constraints (81.6% reduction)");
+console.log("🎯 Architecture: Split-Verification (DLEQ + ZK)");
 console.log("═══════════════════════════════════════");

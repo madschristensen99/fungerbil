@@ -232,12 +232,8 @@ async function generateWitness() {
         
         // Compute derivation = 8 · r · A
         const rA = A.multiply(r);
-        const derivation = rA.multiply(8n);  // S = 8·r·A (shared secret)
+        const derivation = rA.multiply(8n);
         const derivationHex = derivation.toHex();
-        
-        // Decompress S for light circuit
-        const S_extended = decompressToExtendedBase85(derivationHex);
-        const S_formatted = formatForCircuit(S_extended);
         
         // Hash: Keccak256(derivation || output_index)
         const derivationBytes = Buffer.from(derivationHex, 'hex');
@@ -378,13 +374,18 @@ async function generateWitness() {
         fs.writeFileSync(outputPath, JSON.stringify(witness, null, 2));
         console.log(`\n✅ Complete witness data saved to ${outputPath}`);
         
-        // Circuit input for lightweight circuit (DLEQ architecture)
+        // Also save in a format ready for circuit testing
         const circuitInput = {
-            S_extended: S_formatted,  // Shared secret 8·r·A
+            r: witness.r,
             v: witness.v,
+            output_index: witness.output_index,
             H_s_scalar: witness.H_s_scalar,
+            P_extended: witness.P_extended,
             R_x: witness.R_x,
+            P_compressed: witness.P_compressed,
             ecdhAmount: witness.ecdhAmount,
+            A_compressed: witness.A_compressed,
+            B_compressed: witness.B_compressed,
             monero_tx_hash: witness.monero_tx_hash
         };
         
