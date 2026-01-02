@@ -16,6 +16,7 @@ include "./lib/ed25519/point_add.circom";
 include "./lib/ed25519/point_compress.circom";
 include "./lib/ed25519/point_decompress.circom";
 include "./lib/ed25519/scalar_range_check.circom";
+include "./lib/ed25519/point_validation.circom";
 
 // Hash functions
 include "keccak-circom/circuits/keccak.circom";
@@ -29,13 +30,24 @@ include "./node_modules/circomlib/circuits/gates.circom";
 // CURVE CONSTANTS - Ed25519
 // ════════════════════════════════════════════════════════════════════════════
 
-// Base point G in extended coordinates (base 2^85)
+// Ed25519 base point G in extended coordinates (X:Y:Z:T)
+// Encoding: Base 2^85 limb representation (3 limbs per coordinate)
+// Each coordinate is split into 3 limbs of 85 bits each
+// This matches the representation used by @electron-labs/ed25519-circom
+//
+// Standard Ed25519 base point:
+// x = 15112221349535400772501151409588531511454012693041857206046113283949847762202
+// y = 46316835694926478169428394003475163141307993866256225615783033603165251855960
+//
+// Source: RFC 8032 (Ed25519 specification)
+// Verification: These constants can be verified by reconstructing the affine coordinates
+// from the limb representation and checking they satisfy the Ed25519 curve equation
 function ed25519_G() {
     return [
-        [6836562328990639286768922, 21231440843933962135602345, 10097852978535018773096760],
-        [7737125245533626718119512, 23211375736600880154358579, 30948500982134506872478105],
-        [1, 0, 0],
-        [20943500354259764865654179, 24722277920680796426601402, 31289658119428895172835987]
+        [6836562328990639286768922, 21231440843933962135602345, 10097852978535018773096760],  // X coordinate (3 limbs)
+        [7737125245533626718119512, 23211375736600880154358579, 30948500982134506872478105],  // Y coordinate (3 limbs)
+        [1, 0, 0],  // Z coordinate (always 1 for affine points)
+        [20943500354259764865654179, 24722277920680796426601402, 31289658119428895172835987]  // T coordinate (T = X*Y/Z)
     ];
 }
 
@@ -52,7 +64,11 @@ template MoneroBridge() {
     signal input r[255];            // Transaction secret key (255-bit scalar)
     signal input v;                 // Amount in atomic piconero (64 bits)
     signal input output_index;      // Output index in transaction (0, 1, 2, ...)
+                                    // TODO (High Issue #5): Bind output_index to H_s derivation
     signal input H_s_scalar[255];   // Pre-reduced scalar: Keccak256(8·r·A || i) mod L
+                                    // TODO (Critical Issue #2): Verify H_s derivation from S and output_index
+                                    // Requires: H_s = Keccak256(S_compressed || output_index) mod L
+                                    // Currently accepted as private input without verification
     signal input P_extended[4][3];  // Destination stealth address (extended coords)
     
     // ════════════════════════════════════════════════════════════════════════
@@ -65,6 +81,9 @@ template MoneroBridge() {
     signal input A_compressed;      // LP's view public key (CRITICAL: prevents wrong address)
     signal input B_compressed;      // LP's spend public key
     signal input monero_tx_hash;    // Monero tx hash (for uniqueness)
+                                    // TODO (High Issue #6): Add cryptographic binding for tx_hash
+                                    // Currently has zero constraints - provides no security
+                                    // Should be bound to proof via nullifier or included in hash
     
     // ════════════════════════════════════════════════════════════════════════
     // OUTPUTS
@@ -150,6 +169,14 @@ template MoneroBridge() {
     }
     P_compressed_bits.out === P_compressed;
     
+    // Validate P_extended is a valid curve point (Critical Issue #3)
+    component validateP = ValidatePoint();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            validateP.P[i][j] <== P_extended[i][j];
+        }
+    }
+    
     // ════════════════════════════════════════════════════════════════════════
     // STEP 3: Compute and verify S = 8·r·A
     // CRITICAL: Proves funds were sent to LP's address, not attacker's
@@ -164,7 +191,15 @@ template MoneroBridge() {
     }
     decompressA.in[255] <== 0;
     
-    // Decompress B from public input (needed for potential P derivation check)
+    // Validate decompressed A is a valid curve point (Critical Issue #3, Medium Issue #9)
+    component validateA = VerifyDecompression();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            validateA.P[i][j] <== decompressA.out[i][j];
+        }
+    }
+    
+    // Decompress B from public input (needed for P derivation check)
     component decompressB = PointDecompress();
     component B_compressed_bits = Num2Bits(255);
     B_compressed_bits.in <== B_compressed;
@@ -172,6 +207,14 @@ template MoneroBridge() {
         decompressB.in[i] <== B_compressed_bits.out[i];
     }
     decompressB.in[255] <== 0;
+    
+    // Validate decompressed B is a valid curve point (Critical Issue #3, Medium Issue #9)
+    component validateB = VerifyDecompression();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            validateB.P[i][j] <== decompressB.out[i][j];
+        }
+    }
     
     // Compute r·A (scalar multiplication of r with LP's view public key)
     component compute_rA = ScalarMul();
