@@ -3,8 +3,8 @@
 
 pragma circom 2.1.0;
 
-include "../../node_modules/circomlib/circuits/bitify.circom";
-include "../../node_modules/@electron-labs/ed25519-circom/circuits/modulus.circom";
+include "circomlib/circuits/bitify.circom";
+include "@electron-labs/ed25519-circom/circuits/modulus.circom";
 include "./bigint.circom";
 
 // Modular reduction for Ed25519 prime field

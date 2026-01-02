@@ -5,12 +5,17 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha --timeout 1000000",
-    "compile": "circom monero_bridge.circom --r1cs --wasm --sym",
+    "compile": "circom monero_bridge.circom --r1cs --wasm --sym -l node_modules",
+    "compile:optimized": "circom monero_bridge.circom --r1cs --wasm --sym --c --O2 -l node_modules",
+    "compile:cpp": "circom monero_bridge.circom --r1cs --c --O2 -l node_modules && cd monero_bridge_cpp && make",
     "compile:debug": "circom circuits/monero_bridge_v54.circom --r1cs --wasm --sym -o build --inspect",
+    "precompute": "node scripts/precompute_g_powers.js",
     "setup": "snarkjs groth16 setup build/monero_bridge_v54.r1cs pot22_final.ptau build/monero_bridge_v54_0000.zkey",
     "contribute": "snarkjs zkey contribute build/monero_bridge_v54_0000.zkey build/monero_bridge_v54_final.zkey --name=\"First contribution\"",
     "export-vkey": "snarkjs zkey export verificationkey build/monero_bridge_v54_final.zkey build/verification_key.json",
-    "export-solidity": "snarkjs zkey export solidityverifier build/monero_bridge_v54_final.zkey contracts/BridgeVerifier.sol"
+    "export-solidity": "snarkjs zkey export solidityverifier build/monero_bridge_v54_final.zkey contracts/BridgeVerifier.sol",
+    "prove:rapidsnark": "echo 'Use: rapidsnark monero_bridge_final.zkey witness.wtns proof.json public.json'",
+    "benchmark": "node scripts/benchmark_prover.js"
   },
   "dependencies": {
     "@electron-labs/ed25519-circom": "github:Electron-Labs/ed25519-circom",

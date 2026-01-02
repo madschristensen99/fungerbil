@@ -4,9 +4,9 @@
 
 pragma circom 2.1.0;
 
-include "../../node_modules/circomlib/circuits/bitify.circom";
-include "../../node_modules/circomlib/circuits/comparators.circom";
-include "../../node_modules/@electron-labs/ed25519-circom/circuits/chunkedsub.circom";
+include "circomlib/circuits/bitify.circom";
+include "circomlib/circuits/comparators.circom";
+include "@electron-labs/ed25519-circom/circuits/chunkedsub.circom";
 
 // Reduce a 256-bit number modulo L
 // Uses conditional subtraction: if in >= L, subtract L; repeat if needed

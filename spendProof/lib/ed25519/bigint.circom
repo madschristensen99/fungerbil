@@ -4,10 +4,10 @@
 
 pragma circom 2.1.0;
 
-include "../../node_modules/circomlib/circuits/bitify.circom";
-include "../../node_modules/@electron-labs/ed25519-circom/circuits/chunkedmul.circom";
-include "../../node_modules/@electron-labs/ed25519-circom/circuits/chunkedsub.circom";
-include "../../node_modules/@electron-labs/ed25519-circom/circuits/chunkify.circom";
+include "circomlib/circuits/bitify.circom";
+include "@electron-labs/ed25519-circom/circuits/chunkedmul.circom";
+include "@electron-labs/ed25519-circom/circuits/chunkedsub.circom";
+include "@electron-labs/ed25519-circom/circuits/chunkify.circom";
 
 // Ed25519 prime: p = 2^255 - 19
 // Represented in base 2^85 as 3 limbs
