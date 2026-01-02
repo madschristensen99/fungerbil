@@ -6,6 +6,7 @@ build/
 monero_bridge_js/
 monero_bridge_light_js/
 monero_bridge_cpp/
+contracts/
 *.r1cs
 *.sym
 *.wtns
