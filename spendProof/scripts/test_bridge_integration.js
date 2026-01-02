@@ -6,14 +6,14 @@ const fs = require('fs');
 console.log("🌉 Monero Bridge Integration Test\n");
 
 // Load proof data
-if (!fs.existsSync('proof_light.json')) {
-    console.log("❌ Error: proof_light.json not found");
+if (!fs.existsSync('proof.json')) {
+    console.log("❌ Error: proof.json not found");
     console.log("Run: ./scripts/test_proof_generation.sh first");
     process.exit(1);
 }
 
-const proof = JSON.parse(fs.readFileSync('proof_light.json', 'utf8'));
-const publicSignals = JSON.parse(fs.readFileSync('public_light.json', 'utf8'));
+const proof = JSON.parse(fs.readFileSync('proof.json', 'utf8'));
+const publicSignals = JSON.parse(fs.readFileSync('public.json', 'utf8'));
 
 console.log("📋 Proof Data:");
 console.log("  • Public signals:", publicSignals.length);

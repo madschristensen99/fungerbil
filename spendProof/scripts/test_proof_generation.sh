@@ -4,7 +4,7 @@
 set -e
 
 echo "🔧 Testing Groth16 Proof Generation"
-echo "Circuit: monero_bridge_light.circom"
+echo "Circuit: monero_bridge.circom (lightweight)"
 echo "Constraints: 479,880"
 echo ""
 
@@ -19,7 +19,7 @@ fi
 echo ""
 echo "⏱️  Step 1: Groth16 Setup (generating proving key)..."
 START=$(date +%s)
-snarkjs groth16 setup monero_bridge_light.r1cs powersOfTau28_hez_final_19.ptau monero_bridge_light_0000.zkey
+snarkjs groth16 setup monero_bridge.r1cs powersOfTau28_hez_final_19.ptau monero_bridge_0000.zkey
 END=$(date +%s)
 SETUP_TIME=$((END - START))
 echo "✅ Setup complete: ${SETUP_TIME}s"
@@ -27,20 +27,20 @@ echo "✅ Setup complete: ${SETUP_TIME}s"
 echo ""
 echo "⏱️  Step 2: Contribute randomness..."
 START=$(date +%s)
-echo "random entropy" | snarkjs zkey contribute monero_bridge_light_0000.zkey monero_bridge_light_final.zkey --name="First contribution" -v
+echo "random entropy" | snarkjs zkey contribute monero_bridge_0000.zkey monero_bridge_final.zkey --name="First contribution" -v
 END=$(date +%s)
 CONTRIBUTE_TIME=$((END - START))
 echo "✅ Contribution complete: ${CONTRIBUTE_TIME}s"
 
 echo ""
 echo "⏱️  Step 3: Export verification key..."
-snarkjs zkey export verificationkey monero_bridge_light_final.zkey verification_key_light.json
+snarkjs zkey export verificationkey monero_bridge_final.zkey verification_key.json
 echo "✅ Verification key exported"
 
 echo ""
 echo "⏱️  Step 4: Generate witness..."
 START=$(date +%s)
-snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input.json witness.wtns
+snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input.json witness.wtns
 END=$(date +%s)
 WITNESS_TIME=$((END - START))
 echo "✅ Witness generated: ${WITNESS_TIME}s"
@@ -48,7 +48,7 @@ echo "✅ Witness generated: ${WITNESS_TIME}s"
 echo ""
 echo "⏱️  Step 5: Generate proof (THIS IS THE BIG ONE)..."
 START=$(date +%s)
-snarkjs groth16 prove monero_bridge_light_final.zkey witness.wtns proof_light.json public_light.json
+snarkjs groth16 prove monero_bridge_final.zkey witness.wtns proof.json public.json
 END=$(date +%s)
 PROVE_TIME=$((END - START))
 echo "✅ Proof generated: ${PROVE_TIME}s"
@@ -56,7 +56,7 @@ echo "✅ Proof generated: ${PROVE_TIME}s"
 echo ""
 echo "⏱️  Step 6: Verify proof..."
 START=$(date +%s)
-snarkjs groth16 verify verification_key_light.json public_light.json proof_light.json
+snarkjs groth16 verify verification_key.json public.json proof.json
 END=$(date +%s)
 VERIFY_TIME=$((END - START))
 echo "✅ Proof verified: ${VERIFY_TIME}s"
@@ -74,6 +74,6 @@ echo ""
 echo "Total (after setup): $((WITNESS_TIME + PROVE_TIME))s"
 echo ""
 echo "💾 File sizes:"
-ls -lh monero_bridge_light_final.zkey proof_light.json public_light.json | awk '{print $9 ": " $5}'
+ls -lh monero_bridge_final.zkey proof.json public.json | awk '{print $9 ": " $5}'
 echo ""
 echo "🎉 Full Groth16 proof generation successful!"

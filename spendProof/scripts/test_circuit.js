@@ -9,7 +9,7 @@ console.log("Constraints: 479,880 (81.6% reduction)\n");
 console.log("Test 1: Real Monero transaction data");
 const test1Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input.json witness.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input.json witness.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
@@ -31,7 +31,7 @@ fs.writeFileSync('input_wrong_r.json', JSON.stringify(wrongHs, null, 2));
 
 const test2Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input_wrong_r.json witness_wrong_r.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_r.json witness_wrong_r.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
@@ -53,7 +53,7 @@ fs.writeFileSync('input_wrong_amount.json', JSON.stringify(wrongAmount, null, 2)
 
 const test3Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input_wrong_amount.json witness_wrong_amount.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_amount.json witness_wrong_amount.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
@@ -77,7 +77,7 @@ fs.writeFileSync('input_wrong_dest.json', JSON.stringify(wrongR, null, 2));
 
 const test4Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_light_js/monero_bridge_light.wasm input_wrong_dest.json witness_wrong_dest.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_dest.json witness_wrong_dest.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });

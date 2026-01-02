@@ -7,15 +7,15 @@ echo "🔧 Exporting Solidity Verifier"
 echo ""
 
 # Check if zkey exists
-if [ ! -f "monero_bridge_light_final.zkey" ]; then
-    echo "❌ Error: monero_bridge_light_final.zkey not found"
+if [ ! -f "monero_bridge_final.zkey" ]; then
+    echo "❌ Error: monero_bridge_final.zkey not found"
     echo "Run ./scripts/test_proof_generation.sh first to generate the proving key"
     exit 1
 fi
 
 # Export verifier
 echo "⏱️  Exporting Groth16 verifier contract..."
-snarkjs zkey export solidityverifier monero_bridge_light_final.zkey contracts/MoneroBridgeVerifier.sol
+snarkjs zkey export solidityverifier monero_bridge_final.zkey contracts/MoneroBridgeVerifier.sol
 
 echo "✅ Verifier exported to contracts/MoneroBridgeVerifier.sol"
 echo ""
