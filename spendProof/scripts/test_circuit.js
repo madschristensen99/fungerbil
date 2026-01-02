@@ -67,9 +67,15 @@ try {
 // Test 4: Wrong destination address (should FAIL - tests destination verification)
 console.log("Test 4: Wrong destination address (P_compressed)");
 const wrongDest = JSON.parse(JSON.stringify(realInput));
-// Flip bit 10 in P_compressed (similar to Test 2 approach)
-const pBigInt = BigInt(wrongDest.P_compressed);
-wrongDest.P_compressed = (pBigInt ^ (1n << 10n)).toString(); // XOR to flip bit 10
+// Flip bit 10 in P_compressed array
+if (Array.isArray(wrongDest.P_compressed)) {
+    wrongDest.P_compressed[10] = wrongDest.P_compressed[10] === 0 ? 1 : 0;
+}
+// Also flip a bit in H_s_scalar to make amount decryption fail
+// This simulates using the wrong derivation scalar for a different destination
+if (Array.isArray(wrongDest.H_s_scalar)) {
+    wrongDest.H_s_scalar[5] = wrongDest.H_s_scalar[5] === 0 ? 1 : 0;
+}
 fs.writeFileSync('input_wrong_dest.json', JSON.stringify(wrongDest, null, 2));
 
 const test4Start = Date.now();

@@ -374,19 +374,36 @@ async function generateWitness() {
         fs.writeFileSync(outputPath, JSON.stringify(witness, null, 2));
         console.log(`\n✅ Complete witness data saved to ${outputPath}`);
         
+        // Helper function to convert BigInt to 256-bit array
+        function bigIntToBitArray(value, numBits = 256) {
+            const bigIntValue = BigInt(value);
+            const bits = [];
+            for (let i = 0; i < numBits; i++) {
+                bits.push(Number((bigIntValue >> BigInt(i)) & 1n));
+            }
+            return bits;
+        }
+
         // Also save in a format ready for circuit testing
+        // Only include inputs that the circuit expects
         const circuitInput = {
+            // Private inputs
             r: witness.r,
             v: witness.v,
             output_index: witness.output_index,
+            // Decompressed x-coordinates (base 2^85, 3 limbs each)
+            R_x: R_formatted[0],  // X coordinate of R
+            A_x: A_formatted[0],  // X coordinate of A
+            B_x: B_formatted[0],  // X coordinate of B
+            // H_s scalar (255 bits)
             H_s_scalar: witness.H_s_scalar,
-            P_extended: witness.P_extended,
-            R_compressed: witness.R_x, // Renamed from R_x to R_compressed
-            P_compressed: witness.P_compressed,
+            // Public inputs - Convert compressed points from field elements to 256-bit arrays
+            R_compressed: bigIntToBitArray(witness.R_x, 256),
+            P_compressed: bigIntToBitArray(witness.P_compressed, 256),
             ecdhAmount: witness.ecdhAmount,
-            A_compressed: witness.A_compressed,
-            B_compressed: witness.B_compressed,
-            monero_tx_hash: witness.monero_tx_hash
+            A_compressed: bigIntToBitArray(witness.A_compressed, 256),
+            B_compressed: bigIntToBitArray(witness.B_compressed, 256),
+            monero_tx_hash: bigIntToBitArray(witness.monero_tx_hash, 256)
         };
         
         fs.writeFileSync("input.json", JSON.stringify(circuitInput, null, 2));
