@@ -15,6 +15,7 @@ include "./lib/ed25519/scalar_mul.circom";
 include "./lib/ed25519/point_add.circom";
 include "./lib/ed25519/point_compress.circom";
 include "./lib/ed25519/point_decompress.circom";
+include "./lib/ed25519/scalar_range_check.circom";
 
 // Hash functions
 include "keccak-circom/circuits/keccak.circom";
@@ -70,6 +71,36 @@ template MoneroBridge() {
     // ════════════════════════════════════════════════════════════════════════
     
     signal output verified_amount;
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // SECURITY: Constrain bit inputs to be binary (Critical Issue #4)
+    // ════════════════════════════════════════════════════════════════════════
+    
+    // Ensure r is a valid bit array (each element is 0 or 1)
+    for (var i = 0; i < 255; i++) {
+        r[i] * (r[i] - 1) === 0;
+    }
+    
+    // Ensure H_s_scalar is a valid bit array (each element is 0 or 1)
+    for (var i = 0; i < 255; i++) {
+        H_s_scalar[i] * (H_s_scalar[i] - 1) === 0;
+    }
+    
+    // Ensure scalars are in valid range (< L) (High Severity Issue #7)
+    component rRangeCheck = ScalarInRange();
+    for (var i = 0; i < 255; i++) {
+        rRangeCheck.s[i] <== r[i];
+    }
+    
+    component HsRangeCheck = ScalarInRange();
+    for (var i = 0; i < 255; i++) {
+        HsRangeCheck.s[i] <== H_s_scalar[i];
+    }
+    
+    // Ensure amount v is within 64-bit range (Medium Issue #8)
+    component vRangeCheck = Num2Bits(64);
+    vRangeCheck.in <== v;
+    // Implicit range check: Num2Bits will fail if v >= 2^64
     
     // ════════════════════════════════════════════════════════════════════════
     // STEP 1: Verify R = r·G (proves knowledge of secret key r)
@@ -195,6 +226,39 @@ template MoneroBridge() {
     signal S_x_bits[256];
     for (var i = 0; i < 256; i++) {
         S_x_bits[i] <== compressS.out[i];
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // STEP 3.5: CRITICAL - Verify P = H_s·G + B (stealth address derivation)
+    // This prevents attackers from using their own addresses (Critical Issue #1)
+    // ════════════════════════════════════════════════════════════════════════
+    
+    // Compute H_s·G (scalar multiplication of H_s with base point G)
+    component computeHsG = ScalarMul();
+    for (var i = 0; i < 255; i++) {
+        computeHsG.s[i] <== H_s_scalar[i];
+    }
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            computeHsG.P[i][j] <== G[i][j];
+        }
+    }
+    
+    // Compute P_derived = H_s·G + B (point addition)
+    component computeP = PointAdd();
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            computeP.P[i][j] <== computeHsG.sP[i][j];
+            computeP.Q[i][j] <== decompressB.out[i][j];
+        }
+    }
+    
+    // Verify computed P matches provided P_extended
+    // This is the CRITICAL constraint that prevents address substitution attacks
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 3; j++) {
+            computeP.R[i][j] === P_extended[i][j];
+        }
     }
     
     // ════════════════════════════════════════════════════════════════════════
