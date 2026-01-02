@@ -258,18 +258,9 @@ template MoneroBridge() {
     }
     
     // S = 8·r·A is now in double3.R
-    // Compress S for use in amount key derivation
-    component compressS = PointCompress();
-    for (var i = 0; i < 4; i++) {
-        for (var j = 0; j < 3; j++) {
-            compressS.P[i][j] <== double3.R[i][j];
-        }
-    }
-    
-    signal S_x_bits[256];
-    for (var i = 0; i < 256; i++) {
-        S_x_bits[i] <== compressS.out[i];
-    }
+    // Note: S is not used directly in this circuit. H_s_scalar is provided as a private input
+    // and used for amount key derivation. In a future version with H_s derivation verification,
+    // S would be compressed and hashed with output_index to derive H_s.
     
     // ════════════════════════════════════════════════════════════════════════
     // STEP 3.5: CRITICAL - Verify P = H_s·G + B (stealth address derivation)
