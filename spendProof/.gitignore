@@ -24,6 +24,10 @@ input_*.json
 witness.wtns
 witness_data.json
 
+# Generated example files
+example_*.js
+bridge_call.json
+
 # Logs
 *.log
 npm-debug.log*
