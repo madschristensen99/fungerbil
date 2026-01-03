@@ -3,6 +3,57 @@ const axios = require("axios");
 const fs = require("fs");
 const { decompressToExtendedBase85, formatForCircuit } = require("./ed25519_utils");
 
+// Convert base 2^85 limbs back to BigInt
+function fromBase85Limbs(limbs) {
+    const base = 1n << 85n; // 2^85
+    return BigInt(limbs[0]) + BigInt(limbs[1]) * base + BigInt(limbs[2]) * base * base;
+}
+
+// Compress Ed25519 extended point to 256-bit representation
+// Ed25519 compression: y-coordinate (255 bits) + sign bit of x (1 bit)
+function compressPoint(extended) {
+    // Extended coordinates: {X, Y, Z, T} in base 2^85 limbs
+    // Affine: x = X/Z, y = Y/Z
+    // Compressed: y with sign bit of x
+    
+    const p = 2n ** 255n - 19n; // Ed25519 prime
+    
+    // Convert from base 2^85 limbs to BigInt
+    const X = fromBase85Limbs(extended.X);
+    const Y = fromBase85Limbs(extended.Y);
+    const Z = fromBase85Limbs(extended.Z);
+    
+    // Compute modular inverse of Z
+    const Z_inv = modInverse(Z, p);
+    const x = (X * Z_inv) % p;
+    const y = (Y * Z_inv) % p;
+    
+    // Compress: y + sign bit of x
+    const bits = [];
+    for (let i = 0; i < 255; i++) {
+        bits.push(((y >> BigInt(i)) & 1n).toString());
+    }
+    // Sign bit: 1 if x is odd, 0 if even
+    bits.push((x & 1n).toString());
+    
+    return bits;
+}
+
+// Modular inverse using extended Euclidean algorithm
+function modInverse(a, m) {
+    a = ((a % m) + m) % m;
+    let [old_r, r] = [a, m];
+    let [old_s, s] = [1n, 0n];
+    
+    while (r !== 0n) {
+        const quotient = old_r / r;
+        [old_r, r] = [r, old_r - quotient * r];
+        [old_s, s] = [s, old_s - quotient * s];
+    }
+    
+    return ((old_s % m) + m) % m;
+}
+
 // Decode Monero address to extract view key (A) and spend key (B)
 function decodeMoneroAddress(address) {
     // Monero address format: [network_byte][spend_key (32 bytes)][view_key (32 bytes)][checksum (4 bytes)]
@@ -239,6 +290,9 @@ async function generateWitness() {
         const S_extended = decompressToExtendedBase85(derivationHex);
         const S_formatted = formatForCircuit(S_extended);
         
+        // Compress S to 256-bit representation for optimized circuit
+        const S_compressed_bits = compressPoint(S_extended);
+        
         // Hash: Keccak256(derivation || output_index)
         const derivationBytes = Buffer.from(derivationHex, 'hex');
         const hashInput = Buffer.concat([derivationBytes, Buffer.from([outputIndex])]);
@@ -357,6 +411,7 @@ async function generateWitness() {
                 return (bBigInt & ((1n << 255n) - 1n)).toString();
             })(),
             monero_tx_hash: (txHashBigInt % (1n << 252n)).toString(), // Reduced to fit field
+            S_compressed: S_compressed_bits, // 256-bit compressed S for optimized circuit
             
             // Metadata for reference (extended coordinates for debugging)
             _metadata: {
@@ -378,17 +433,76 @@ async function generateWitness() {
         fs.writeFileSync(outputPath, JSON.stringify(witness, null, 2));
         console.log(`\n✅ Complete witness data saved to ${outputPath}`);
         
-        // Circuit input for ultra-lightweight circuit
-        // Public inputs: ecdhAmount only
-        // R_x and monero_tx_hash moved to Solidity for binding hash
-        const circuitInput = {
-            S_extended: S_formatted,  // Shared secret 8·r·A (private)
-            v: witness.v,             // Amount (private)
-            H_s_scalar: witness.H_s_scalar,  // Amount key (private)
-            ecdhAmount: witness.ecdhAmount   // ECDH amount (public)
+        // Circuit input for MAXIMALLY optimized circuit
+        // Public inputs: ecdhAmount, H_s_lo, H_s_hi
+        // S input as compressed chunks (no PointCompress in circuit)
+        
+        // Convert S_compressed bits to two 128-bit chunks
+        const S_bits = witness.S_compressed;
+        let S_lo = BigInt(0);
+        let S_hi = BigInt(0);
+        for (let i = 0; i < 128; i++) {
+            if (S_bits[i] === '1') S_lo |= (BigInt(1) << BigInt(i));
+        }
+        for (let i = 0; i < 128; i++) {
+            if (S_bits[i + 128] === '1') S_hi |= (BigInt(1) << BigInt(i));
+        }
+        
+        // Convert H_s_scalar bits to two chunks (128 + 127 bits)
+        const H_s_bits = witness.H_s_scalar;
+        let H_s_lo = BigInt(0);
+        let H_s_hi = BigInt(0);
+        for (let i = 0; i < 128; i++) {
+            if (H_s_bits[i] === '1') H_s_lo |= (BigInt(1) << BigInt(i));
+        }
+        for (let i = 0; i < 127; i++) {
+            if (H_s_bits[i + 128] === '1') H_s_hi |= (BigInt(1) << BigInt(i));
+        }
+        
+        // For ultra-light circuit (239K constraints)
+        const circuitInputUltra = {
+            S_lo_in: S_lo.toString(),     // Lower 128 bits of S (private)
+            S_hi_in: S_hi.toString(),     // Upper 128 bits of S (private)
+            v: witness.v,                 // Amount (private)
+            ecdhAmount: witness.ecdhAmount, // ECDH amount (public)
+            H_s_lo: H_s_lo.toString(),    // Lower 128 bits of H_s (public)
+            H_s_hi: H_s_hi.toString()     // Upper 127 bits of H_s (public)
         };
         
-        fs.writeFileSync("input.json", JSON.stringify(circuitInput, null, 2));
+        // For MINIMAL circuit (196 constraints) - compute amount_key
+        // Reconstruct H_s from bits
+        let H_s_full = BigInt(0);
+        for (let i = 0; i < 255; i++) {
+            if (H_s_bits[i] === '1') H_s_full |= (BigInt(1) << BigInt(i));
+        }
+        
+        // Convert to 32-byte buffer (little-endian)
+        const H_s_bytes = Buffer.alloc(32);
+        for (let i = 0; i < 32; i++) {
+            H_s_bytes[i] = Number((H_s_full >> BigInt(i * 8)) & 0xFFn);
+        }
+        
+        // Compute amount_key = Keccak("amount" || H_s)
+        const amountPrefixBuf = Buffer.from("amount", "utf8");
+        const amountKeyInputBuf = Buffer.concat([amountPrefixBuf, H_s_bytes]);
+        const amountKeyHash = keccak256(amountKeyInputBuf);
+        
+        // Extract first 64 bits (8 bytes) as amount_key
+        let amount_key = BigInt(0);
+        for (let i = 0; i < 8; i++) {
+            amount_key |= BigInt(amountKeyHash[i]) << BigInt(i * 8);
+        }
+        
+        const circuitInputMinimal = {
+            S_lo: S_lo.toString(),        // Lower 128 bits of S (private)
+            S_hi: S_hi.toString(),        // Upper 128 bits of S (private)
+            v: witness.v,                 // Amount (private)
+            amount_key: amount_key.toString(), // Keccak("amount" || H_s) first 64 bits (public)
+            ecdhAmount: witness.ecdhAmount     // ECDH amount (public)
+        };
+        
+        fs.writeFileSync("input.json", JSON.stringify(circuitInputMinimal, null, 2));
+        fs.writeFileSync("input_ultra.json", JSON.stringify(circuitInputUltra, null, 2));
         console.log(`✅ Circuit input saved to input.json`);
         
         // Display summary
