@@ -1,6 +1,9 @@
 # Node modules
 node_modules/
 
+# Local library copies (use npm packages instead)
+lib/
+
 # Build artifacts
 build/
 monero_bridge_js/
