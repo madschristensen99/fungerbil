@@ -378,14 +378,14 @@ async function generateWitness() {
         fs.writeFileSync(outputPath, JSON.stringify(witness, null, 2));
         console.log(`\n✅ Complete witness data saved to ${outputPath}`);
         
-        // Circuit input for lightweight circuit (DLEQ architecture)
+        // Circuit input for ultra-lightweight circuit
+        // Public inputs: ecdhAmount only
+        // R_x and monero_tx_hash moved to Solidity for binding hash
         const circuitInput = {
-            S_extended: S_formatted,  // Shared secret 8·r·A
-            v: witness.v,
-            H_s_scalar: witness.H_s_scalar,
-            R_x: witness.R_x,
-            ecdhAmount: witness.ecdhAmount,
-            monero_tx_hash: witness.monero_tx_hash
+            S_extended: S_formatted,  // Shared secret 8·r·A (private)
+            v: witness.v,             // Amount (private)
+            H_s_scalar: witness.H_s_scalar,  // Amount key (private)
+            ecdhAmount: witness.ecdhAmount   // ECDH amount (public)
         };
         
         fs.writeFileSync("input.json", JSON.stringify(circuitInput, null, 2));

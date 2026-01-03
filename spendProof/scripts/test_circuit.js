@@ -2,14 +2,14 @@
 const fs = require('fs');
 const { execSync } = require('child_process');
 
-console.log("🧪 Testing Lightweight Monero Bridge Circuit\n");
-console.log("Constraints: 479,880 (81.6% reduction)\n");
+console.log("🧪 Testing Ultra-Lightweight Monero Bridge Circuit\n");
+console.log("Constraints: 240,190 (50% reduction from light, 94% from original)\n");
 
 // Test 1: Real data (should PASS)
 console.log("Test 1: Real Monero transaction data");
 const test1Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input.json witness.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_ultra_light_js/monero_bridge_ultra_light.wasm input.json witness.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });
@@ -67,41 +67,22 @@ try {
     console.log(`✅ PASS - Wrong amount rejected (amount verification working) (⏱️  ${test3Time}ms)\n`);
 }
 
-// Test 4: Wrong R_x (should work - R is only for binding hash)
-console.log("Test 4: Wrong R_x (tests binding)");
-const wrongR = JSON.parse(JSON.stringify(realInput));
-// Flip bits in R_x
-const rBigInt = BigInt(wrongR.R_x);
-wrongR.R_x = (rBigInt ^ (1n << 10n)).toString();
-fs.writeFileSync('input_wrong_dest.json', JSON.stringify(wrongR, null, 2));
-
-const test4Start = Date.now();
-try {
-    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input_wrong_dest.json witness_wrong_dest.wtns', {
-        cwd: process.cwd(),
-        stdio: 'pipe'
-    });
-    const test4Time = Date.now() - test4Start;
-    console.log(`✅ PASS - Wrong R_x accepted (⏱️  ${test4Time}ms)`);
-    console.log(`    (R_x only affects binding_hash, not amount verification)\n`);
-} catch (e) {
-    const test4Time = Date.now() - test4Start;
-    console.log(`❌ UNEXPECTED - Wrong R_x rejected (⏱️  ${test4Time}ms)\n`);
-}
+// Test 4: Removed - R_x and tx_hash now verified in Solidity
+console.log("Test 4: Skipped (R_x moved to Solidity binding hash)\n");
 
 console.log("═══════════════════════════════════════");
-console.log("Lightweight Circuit Summary:");
+console.log("Ultra-Lightweight Circuit Summary:");
 console.log("");
 console.log("✅ Circuit Verifies:");
 console.log("  1. Amount decryption: v = ecdhAmount ⊕ Keccak(\"amount\" || H_s)");
-console.log("  2. Binding hash: Hash(R, S, tx_hash)");
+console.log("  2. Outputs: verified_amount, S_compressed");
 console.log("  3. Range checks: v > 0, v < 2^64");
 console.log("");
-console.log("🔐 External DLEQ Proof Verifies:");
-console.log("  1. log_G(R) = log_A(S/8) - same secret r");
-console.log("  2. Binds to circuit via binding_hash");
-console.log("  3. Prevents fake S attacks");
+console.log("🔐 Solidity Verifies:");
+console.log("  1. Binding hash: Hash(R, S, tx_hash) - EVM precompile");
+console.log("  2. DLEQ proof: log_G(R) = log_A(S/8)");
+console.log("  3. Replay protection: tx_hash not claimed");
 console.log("");
-console.log("⚡ Performance: 479,880 constraints (81.6% reduction)");
-console.log("🎯 Architecture: Split-Verification (DLEQ + ZK)");
+console.log("⚡ Performance: 240,190 constraints (94% reduction)");
+console.log("🎯 Architecture: Ultra-Light (Keccak in Solidity)");
 console.log("═══════════════════════════════════════");

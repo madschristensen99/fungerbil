@@ -22,7 +22,7 @@ interface IGroth16Verifier {
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,
         uint[2] calldata _pC,
-        uint[5] calldata _pubSignals
+        uint[4] calldata _pubSignals  // [ecdhAmount, verified_amount, S_lo, S_hi]
     ) external view returns (bool);
 }
 
@@ -82,20 +82,22 @@ contract MoneroBridge {
     /**
      * @notice Mint wXMR by proving ownership of Monero transaction
      * @param proof Groth16 proof components [pA, pB, pC]
-     * @param R_x Transaction public key (compressed x-coordinate)
-     * @param ecdhAmount ECDH encrypted amount
-     * @param moneroTxHash Monero transaction hash
-     * @param bindingHash Hash(R, S, tx_hash) from circuit output
-     * @param verifiedAmount Decrypted amount from circuit output
+     * @param ecdhAmount ECDH encrypted amount (public input to circuit)
+     * @param verifiedAmount Decrypted amount (circuit output)
+     * @param S_lo Lower 128 bits of compressed S (circuit output)
+     * @param S_hi Upper 128 bits of compressed S (circuit output)
+     * @param R_x Transaction public key (NOT in circuit, for binding hash)
+     * @param moneroTxHash Monero transaction hash (NOT in circuit, for binding hash)
      * @param recipient Address to receive wXMR
      */
     function mint(
         uint[8] calldata proof, // [pA[2], pB[4], pC[2]]
-        uint256 R_x,
         uint256 ecdhAmount,
-        uint256 moneroTxHash,
-        uint256 bindingHash,
         uint256 verifiedAmount,
+        uint256 S_lo,
+        uint256 S_hi,
+        uint256 R_x,
+        uint256 moneroTxHash,
         address recipient
     ) external {
         // Check replay protection
@@ -105,14 +107,27 @@ contract MoneroBridge {
         // Mark as claimed
         claimed[txHash] = true;
         
+        // Reconstruct full 256-bit S from two 128-bit limbs
+        bytes32 S_reconstructed = bytes32((S_hi << 128) | S_lo);
+        
+        // Compute binding hash in Solidity (using EVM Keccak precompile - almost free!)
+        bytes32 bindingHash = keccak256(abi.encodePacked(
+            bytes32(R_x),
+            S_reconstructed,
+            txHash
+        ));
+        
+        // TODO: Verify DLEQ proof that log_G(R) = log_A(S/8)
+        // For now, we trust the relayer. In production, add:
+        // require(DLEQRegistry.isVerified(bindingHash), "DLEQ proof not found");
+        
         // Prepare public signals for verifier
-        // Order: [R_x, ecdhAmount, moneroTxHash, binding_hash (output), verified_amount (output)]
-        uint[5] memory publicSignals = [
-            R_x,
-            ecdhAmount,
-            moneroTxHash,
-            bindingHash,      // Circuit output
-            verifiedAmount    // Circuit output
+        // Order: [ecdhAmount (input), verified_amount (output), S_lo (output), S_hi (output)]
+        uint[4] memory publicSignals = [
+            ecdhAmount,       // Public input
+            verifiedAmount,   // Circuit output
+            S_lo,             // Circuit output
+            S_hi              // Circuit output
         ];
         
         // Verify Groth16 proof
@@ -132,7 +147,7 @@ contract MoneroBridge {
         // Mint wXMR to recipient
         wXMR.mint(recipient, amountWXMR);
         
-        emit Mint(recipient, amountWXMR, txHash, bytes32(bindingHash));
+        emit Mint(recipient, amountWXMR, txHash, bindingHash);
     }
     
     /**
