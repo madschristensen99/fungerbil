@@ -9,7 +9,7 @@ console.log("Constraints: 240,190 (50% reduction from light, 94% from original)\
 console.log("Test 1: Real Monero transaction data");
 const test1Start = Date.now();
 try {
-    execSync('snarkjs wtns calculate monero_bridge_ultra_light_js/monero_bridge_ultra_light.wasm input.json witness.wtns', {
+    execSync('snarkjs wtns calculate monero_bridge_js/monero_bridge.wasm input.json witness.wtns', {
         cwd: process.cwd(),
         stdio: 'pipe'
     });

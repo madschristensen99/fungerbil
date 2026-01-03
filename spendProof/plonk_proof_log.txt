@@ -1,0 +1,50 @@
+🔧 Testing PLONK Proof Generation
+Circuit: monero_bridge.circom (lightweight)
+Constraints: 479,880
+
+
+⏱️  Step 1: PLONK Setup (generating proving key)...
+[32;22m[INFO]  [39;1msnarkJS[0m: Reading r1cs
+[32;22m[INFO]  [39;1msnarkJS[0m: Plonk constraints: 953439
+[32;22m[INFO]  [39;1msnarkJS[0m: Setup Finished
+✅ Setup complete: 80s
+
+⏱️  Step 2: Export verification key...
+[32;22m[INFO]  [39;1msnarkJS[0m: EXPORT VERIFICATION KEY STARTED
+[32;22m[INFO]  [39;1msnarkJS[0m: > Detected protocol: plonk
+[32;22m[INFO]  [39;1msnarkJS[0m: EXPORT VERIFICATION KEY FINISHED
+✅ Verification key exported
+
+⏱️  Step 3: Generate witness...
+✅ Witness generated: 1s
+
+⏱️  Step 4: Generate PLONK proof (THIS IS THE BIG ONE)...
+✅ Proof generated: 472s
+
+⏱️  Step 5: Verify proof...
+[32;22m[INFO]  [39;1msnarkJS[0m: PLONK VERIFIER STARTED
+[32;22m[INFO]  [39;1msnarkJS[0m: OK!
+✅ Proof verified: 1s
+
+═══════════════════════════════════════
+📊 PLONK Performance Summary
+═══════════════════════════════════════
+Setup:        80s (one-time, universal)
+Witness:      1s
+Prove:        472s ⭐
+Verify:       1s
+
+Total (after setup): 473s
+
+💾 File sizes:
+monero_bridge_plonk.zkey: 2.2G
+proof_plonk.json: 2.2K
+public_plonk.json: 288
+
+🎉 Full PLONK proof generation successful!
+
+📊 PLONK vs Groth16 Comparison:
+  • Setup: PLONK uses universal setup (no ceremony needed)
+  • Proof size: PLONK ~2-3x larger than Groth16
+  • Verification: PLONK ~20-30% more gas than Groth16
+  • Flexibility: PLONK allows circuit updates without new setup
