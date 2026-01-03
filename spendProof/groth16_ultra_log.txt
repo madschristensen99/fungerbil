@@ -1,0 +1,77 @@
+🔧 Testing Groth16 Proof Generation (Ultra-Light)
+Circuit: monero_bridge_ultra_light.circom
+Constraints: 240,190
+
+
+⏱️  Step 1: Groth16 Setup (generating proving key)...
+[32;22m[INFO]  [39;1msnarkJS[0m: Reading r1cs
+[32;22m[INFO]  [39;1msnarkJS[0m: Reading tauG1
+[32;22m[INFO]  [39;1msnarkJS[0m: Reading tauG2
+[32;22m[INFO]  [39;1msnarkJS[0m: Reading alphatauG1
+[32;22m[INFO]  [39;1msnarkJS[0m: Reading betatauG1
+[32;22m[INFO]  [39;1msnarkJS[0m: Circuit hash: 
+		ebc62114 299cb753 a1300f2f b5ab2ac6
+		e5749009 72ad343a b34c9855 894bb197
+		75cb5632 6fb553cd edee1c9d 4f9defdf
+		8d3da992 b69a497d 58d614cc 6788e9b0
+✅ Setup complete: 17s
+
+⏱️  Step 2: Contribute randomness...
+Enter a random text. (Entropy): [36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: L Section: 0/240432
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: L Section: 65536/240432
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: L Section: 131072/240432
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: L Section: 196608/240432
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: H Section: 0/262144
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: H Section: 65536/262144
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: H Section: 131072/262144
+[36;22m[DEBUG] [39;1msnarkJS[0m: Applying key: H Section: 196608/262144
+[32;22m[INFO]  [39;1msnarkJS[0m: Circuit Hash: 
+		ebc62114 299cb753 a1300f2f b5ab2ac6
+		e5749009 72ad343a b34c9855 894bb197
+		75cb5632 6fb553cd edee1c9d 4f9defdf
+		8d3da992 b69a497d 58d614cc 6788e9b0
+[32;22m[INFO]  [39;1msnarkJS[0m: Contribution Hash: 
+		401cf480 2fc2b905 ad71e43e c5efdd66
+		7d841c6b 3ba2e868 91fad010 af06e8bc
+		3b75d01f a0d9f334 16a516d7 85f16206
+		719634d8 24673245 5410f259 f19bda4a
+✅ Contribution complete: 13s
+
+⏱️  Step 3: Export verification key...
+[32;22m[INFO]  [39;1msnarkJS[0m: EXPORT VERIFICATION KEY STARTED
+[32;22m[INFO]  [39;1msnarkJS[0m: > Detected protocol: groth16
+[32;22m[INFO]  [39;1msnarkJS[0m: EXPORT VERIFICATION KEY FINISHED
+✅ Verification key exported
+
+⏱️  Step 4: Generate witness...
+✅ Witness generated: 0s
+
+⏱️  Step 5: Generate proof (THIS IS THE BIG ONE)...
+✅ Proof generated: 3s
+
+⏱️  Step 6: Verify proof...
+[32;22m[INFO]  [39;1msnarkJS[0m: OK!
+✅ Proof verified: 1s
+
+═══════════════════════════════════════
+📊 Groth16 Performance Summary (Ultra-Light)
+═══════════════════════════════════════
+Setup:        17s (one-time)
+Contribution: 13s (one-time)
+Witness:      0s
+Prove:        3s ⭐
+Verify:       1s
+
+Total (after setup): 3s
+
+💾 File sizes:
+monero_bridge_ultra_final.zkey: 104M
+proof_ultra.json: 806
+public_ultra.json: 130
+
+🎉 Full Groth16 proof generation successful!
+
+📊 Comparison:
+  Light (480K):      7s proof time
+  Ultra-Light (240K): 3s proof time
+  Improvement:       ~658% faster
